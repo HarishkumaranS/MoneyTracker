@@ -713,7 +713,6 @@ select.form-input option{background:var(--card);color:var(--text);}
     </div>
   </div>
 </div>
-<script src="https://accounts.google.com/gsi/client" async defer></script>
 <script>
 /* ============================================================
    CONFIG — REPLACE WITH YOUR VALUES
@@ -723,6 +722,7 @@ const CONFIG = {
   API_KEY: "AIzaSyC6ZtXkdc-BHuKxCzlvjRfy2k4Cq7wpl7s",
   CLIENT_ID: "12918599226-rl4mail1kvuitb5cdpuq8m7c7jrtlech.apps.googleusercontent.com",
   SHEET_NAME: "Transactions",
+  PASSWORD_SHEET: "Password",
   SCOPES: "https://www.googleapis.com/auth/spreadsheets"
 };
 // ✅ Sheet ID    : 1CKEV50GdfovPnLF2aotum1qqYR9LRERLRcVH7Z64jmI
@@ -734,6 +734,7 @@ const CONFIG = {
    ============================================================ */
 let state = {
   transactions: [],
+  initialBalances: [],
   isAuthenticated: false,
   isOnline: navigator.onLine,
   theme: localStorage.getItem('mmt_theme') || 'dark',
@@ -988,12 +989,11 @@ function handleSetupPin(){
    LOCK SCREEN
    ============================================================ */
 function showLockScreen(){
-  const hasFP=hasFPSetup();
-  document.getElementById('lock-screen').style.display=hasFP?'flex':'none';
-  document.getElementById('pin-unlock-screen').style.display=hasFP?'none':'flex';
-  document.getElementById('back-to-fp').style.display=hasFP?'block':'none';
-  if(!hasFP) setupUnlockPinPad();
-  else setTimeout(()=>triggerFingerprint(),400);
+  // Always show PIN screen (no fingerprint)
+  document.getElementById('lock-screen').style.display='none';
+  document.getElementById('pin-unlock-screen').style.display='flex';
+  document.getElementById('back-to-fp').style.display='none';
+  setupUnlockPinPad();
 }
 
 async function triggerFingerprint(){
@@ -1041,15 +1041,33 @@ function updateUnlockDots(buf){
     if(d) d.classList.toggle('filled',i<buf.length);
   }
 }
-function handleUnlockPin(){
-  const stored=localStorage.getItem('mmt_pin');
-  if(simpleHash(unlockPinBuffer)===stored){
-    document.getElementById('pin-unlock-screen').style.display='none';
-    document.getElementById('pin-unlock-error').textContent='';
-    enterApp();
-  } else {
-    document.getElementById('pin-unlock-error').textContent='Incorrect PIN. Try again.';
-    unlockPinBuffer='';
+async function handleUnlockPin(){
+  try {
+    const data = await sheetsGET(CONFIG.PASSWORD_SHEET + '!A2:A2');
+    const correctPin = data.values && data.values[0] && data.values[0][0];
+    
+    if (!correctPin) {
+      showToast('No PIN set in Password sheet','error');
+      unlockPinBuffer = '';
+      updateUnlockDots('');
+      return;
+    }
+
+    // Compare as strings, remove decimals if present
+    const cleanPin = String(correctPin).split('.')[0];
+    
+    if (unlockPinBuffer === cleanPin) {
+      document.getElementById('pin-unlock-screen').style.display='none';
+      document.getElementById('pin-unlock-error').textContent='';
+      enterApp();
+    } else {
+      document.getElementById('pin-unlock-error').textContent='Incorrect PIN. Try again.';
+      unlockPinBuffer='';
+      updateUnlockDots('');
+    }
+  } catch (e) {
+    showToast('Error verifying PIN: ' + e.message, 'error');
+    unlockPinBuffer = '';
     updateUnlockDots('');
   }
 }
@@ -1085,7 +1103,8 @@ async function ensureOAuth(){
         resolve(resp.access_token);
       }
     });
-    tokenClient.requestAccessToken({prompt:''});
+    // Remove prompt parameter to use Google's default (asks only first time)
+    tokenClient.requestAccessToken();
   });
 }
 
@@ -1280,16 +1299,25 @@ function rowToTxn(row,index){
     amount:parseFloat(row[6])||0,
     paymentMode:row[7]||'',
     createdAt:row[8]||'',
-    _rowIndex:index+2 // +2 because row 1 = header, array is 0-indexed
+    _rowIndex:index+2 // +2 because row 1 = header, index already adjusted in caller
   };
 }
 
 async function loadTransactions(){
   try{
-    const data = await sheetsGET(CONFIG.SHEET_NAME + '!A2:I');
+    // Load initial balances (rows 2-4)
+    const initData = await sheetsGET(CONFIG.SHEET_NAME + '!A2:I4');
+    const initRows = initData.values || [];
+    
+    // Load all transactions (from row 5 onwards)
+    const data = await sheetsGET(CONFIG.SHEET_NAME + '!A5:I');
     const rows = data.values || [];
 
-    state.transactions = rows.map((r,i)=>rowToTxn(r,i));
+    // Store initial balances separately
+    state.initialBalances = initRows.map((r,i)=>rowToTxn(r,i));
+    
+    // Store regular transactions (exclude initial balances)
+    state.transactions = rows.map((r,i)=>rowToTxn(r,i+3));
 
     localStorage.setItem('mmt_cache', JSON.stringify(state.transactions));
 
@@ -1328,6 +1356,18 @@ function generateId(txns){
    ============================================================ */
 function calcBalances(){
   const bal={union:0,sbi:0,cash:0};
+  
+  // Add initial balances (rows 2-4)
+  if (state.initialBalances) {
+    state.initialBalances.forEach(t=>{
+      const amt=t.type==='Income'?t.amount:-t.amount;
+      if(t.account==='UNION BANK') bal.union+=amt;
+      else if(t.account==='SBI') bal.sbi+=amt;
+      else bal.cash+=amt;
+    });
+  }
+  
+  // Add transactions (from row 5 onwards)
   state.transactions.forEach(t=>{
     const amt=t.type==='Income'?t.amount:-t.amount;
     if(t.account==='UNION BANK') bal.union+=amt;
@@ -1557,7 +1597,7 @@ async function saveTransaction(){
       const createdAt=new Date().toISOString();
       const row=[id,date,desc,acc,cat,type,amt,pay,createdAt];
       await sheetsAPPEND(row);
-      const newTxn={id,date,description:desc,account:acc,category:cat,type,amount:amt,paymentMode:pay,createdAt,_rowIndex:state.transactions.length+2};
+      const newTxn={id,date,description:desc,account:acc,category:cat,type,amount:amt,paymentMode:pay,createdAt,_rowIndex:state.transactions.length+5};
       state.transactions.push(newTxn);
       localStorage.setItem('mmt_cache',JSON.stringify(state.transactions));
       showToast('Transaction Saved! ✓','success');
@@ -1791,15 +1831,15 @@ function renderReport(txns){
    ============================================================ */
 function init(){
   applyTheme(state.theme);
-  if(isFirstLaunch()){
-    showSetupWelcome();
-  } else {
-    showLockScreen();
-  }
+  // Always show PIN unlock screen (no setup flow)
+  document.getElementById('pin-unlock-screen').style.display='flex';
+  setupUnlockPinPad();
+  hideLoader();
 }
 
 // Small delay to let page paint first
 setTimeout(init,300);
 </script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 </body>
 </html>
