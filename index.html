@@ -1091,20 +1091,34 @@ function enterApp(){
    GOOGLE SHEETS API
    ============================================================ */
 async function ensureOAuth(){
-  if(state.oauthToken) return state.oauthToken;
-  return new Promise((resolve,reject)=>{
-    if(typeof google==='undefined'){reject(new Error('Google API not loaded'));return;}
-    const tokenClient=google.accounts.oauth2.initTokenClient({
-      client_id:CONFIG.CLIENT_ID,
-      scope:CONFIG.SCOPES,
-      callback:(resp)=>{
-        if(resp.error){reject(resp);return;}
-        state.oauthToken=resp.access_token;
+  if(state.token) return state.token;
+
+  return new Promise((resolve, reject) => {
+
+    const client = google.accounts.oauth2.initTokenClient({
+      client_id: CONFIG.CLIENT_ID,
+      scope: "https://www.googleapis.com/auth/spreadsheets",
+
+      // ✅ ADD THESE 2 LINES
+      prompt: "",                 // removes repeated account chooser
+      login_hint: "harishkumaran654@gmail.com", // optional (auto-select account)
+
+      callback: (resp) => {
+        if(resp.error){
+          reject(resp);
+          return;
+        }
+
+        state.token = resp.access_token;
+
+        // ✅ SAVE LOGIN STATE
+        localStorage.setItem("mmt_logged_in", "true");
+
         resolve(resp.access_token);
       }
     });
-    // Remove prompt parameter to use Google's default (asks only first time)
-    tokenClient.requestAccessToken();
+
+    client.requestAccessToken();
   });
 }
 
@@ -1302,7 +1316,9 @@ function rowToTxn(row,index){
     _rowIndex:index+2 // +2 because row 1 = header, index already adjusted in caller
   };
 }
-
+if(localStorage.getItem("mmt_logged_in")){
+  ensureOAuth(); // try silent login
+}
 async function loadTransactions(){
   try{
     // Load initial balances (rows 2-4)
