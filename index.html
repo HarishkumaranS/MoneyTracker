@@ -369,6 +369,64 @@ select.form-input option{background:var(--card);color:var(--text);}
 /* Chevron toggle */
 .chevron{transition:transform 0.2s;}
 .chevron.open{transform:rotate(180deg);}
+
+/* ============================================================
+   SELF TRANSFER & ENHANCEMENTS
+   ============================================================ */
+.st-badge{display:inline-flex;align-items:center;gap:3px;padding:2px 6px;border-radius:5px;font-size:9px;font-weight:700;letter-spacing:0.3px;background:rgba(255,167,38,0.18);border:1px solid rgba(255,167,38,0.4);color:#FFA726;margin-left:4px;vertical-align:middle;}
+.toggle-row{display:flex;align-items:center;gap:8px;margin-bottom:10px;padding:8px 12px;background:var(--card);border:1px solid var(--card-border);border-radius:10px;}
+.toggle-row label{display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:var(--text-secondary);font-weight:500;user-select:none;}
+.toggle-row input[type=checkbox]{accent-color:var(--accent);width:16px;height:16px;cursor:pointer;flex-shrink:0;}
+.to-account-group{display:none;margin-top:-4px;}
+.to-account-group.show{display:block;}
+.to-acc-btn{flex:1;height:48px;border-radius:10px;background:var(--input-bg);border:1.5px solid var(--input-border);color:var(--text-secondary);font-size:11px;font-weight:600;cursor:pointer;transition:all 0.15s;display:flex;align-items:center;justify-content:center;gap:5px;}
+.to-acc-btn.active.union-sel{background:rgba(21,101,192,0.15);border-color:#1565C0;color:#5C8DCC;}
+.to-acc-btn.active.sbi-sel{background:rgba(183,28,28,0.15);border-color:#B71C1C;color:#E57373;}
+.to-acc-btn.active.cash-sel{background:rgba(46,125,50,0.15);border-color:#2E7D32;color:#66BB6A;}
+.to-acc-btn:active{transform:scale(0.97);}
+
+/* Extended summary grid */
+.summary-grid-3{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:4px;}
+.summary-card.opening{background:rgba(33,150,243,0.08);border-color:rgba(33,150,243,0.25);}
+.summary-card.current{background:rgba(187,134,252,0.08);border-color:rgba(187,134,252,0.25);}
+.summary-value.blue{color:#2196F3;}
+.summary-value.purple{color:var(--accent);}
+
+/* Report balance cards */
+.report-balance-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;}
+.report-balance-card{border-radius:12px;padding:14px;border:1px solid;}
+.report-balance-card.opening{background:rgba(33,150,243,0.1);border-color:rgba(33,150,243,0.3);}
+.report-balance-card.closing{background:rgba(187,134,252,0.1);border-color:rgba(187,134,252,0.3);}
+.rbc-label{font-size:10px;font-weight:600;color:var(--text-secondary);letter-spacing:0.5px;text-transform:uppercase;margin-bottom:5px;}
+.rbc-value{font-size:16px;font-weight:700;}
+.rbc-value.blue{color:#2196F3;}
+.rbc-value.purple{color:var(--accent);}
+
+/* Category sections */
+.cat-section-title{font-size:12px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;padding:8px 0 6px;border-bottom:1px solid var(--card-border);margin-bottom:10px;}
+.cat-section-title.income{color:var(--income);}
+.cat-section-title.expense{color:var(--expense);}
+.cat-section-title.net{color:#2196F3;}
+.cat-bar-fill.income-fill{background:linear-gradient(90deg,var(--income),#81C784);}
+.cat-bar-fill.expense-fill{background:linear-gradient(90deg,var(--expense),#E57373);}
+.cat-bar-fill.net-fill{background:linear-gradient(90deg,#2196F3,#64B5F6);}
+.cat-amount.income-color{color:var(--income);}
+.cat-amount.expense-color{color:var(--expense);}
+.cat-amount.net-color{color:#2196F3;}
+.cat-section{margin-bottom:16px;}
+.cat-net-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--card-border);font-size:13px;}
+.cat-net-row:last-child{border-bottom:none;}
+
+/* Download Report button */
+.btn-download{width:100%;height:46px;border-radius:10px;background:linear-gradient(135deg,rgba(187,134,252,0.2),rgba(187,134,252,0.1));border:1.5px solid var(--accent);color:var(--accent);font-size:14px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;margin-top:12px;transition:opacity 0.2s;}
+.btn-download:active{opacity:0.75;}
+
+/* Print styles */
+@media print{
+  body *{visibility:hidden;}
+  #print-area,#print-area *{visibility:visible;}
+  #print-area{position:absolute;left:0;top:0;width:100%;background:#fff;color:#000;padding:20px;}
+}
 </style>
 </head>
 <body>
@@ -543,7 +601,13 @@ select.form-input option{background:var(--card);color:var(--text);}
           <div class="skeleton" style="width:160px;flex-shrink:0;border-radius:14px;"></div>
         </div>
         <div class="section-title">This Month</div>
-        <div class="summary-grid" id="summary-cards">
+        <div class="toggle-row">
+          <label>
+            <input type="checkbox" id="dash-include-st" onchange="renderDashboard()">
+            Include Self Transfers
+          </label>
+        </div>
+        <div class="summary-grid-3" id="summary-cards">
           <div class="skeleton"></div><div class="skeleton"></div>
           <div class="skeleton"></div><div class="skeleton"></div>
         </div>
@@ -576,7 +640,24 @@ select.form-input option{background:var(--card);color:var(--text);}
           <button class="seg-btn account-seg" id="acc-cash" onclick="selectAccount('CASH')">💵 CASH</button>
         </div>
       </div>
+      <!-- Self Transfer -->
       <div class="form-group">
+        <div class="toggle-row" style="margin-bottom:0;">
+          <label>
+            <input type="checkbox" id="self-transfer-chk" onchange="toggleSelfTransfer()">
+            Self Transfer
+          </label>
+        </div>
+      </div>
+      <div class="form-group to-account-group" id="to-account-group">
+        <label class="form-label">To Account</label>
+        <div class="seg-group" id="to-acc-btns">
+          <button class="to-acc-btn" id="to-union" onclick="selectToAccount('UNION BANK')">🏦 UNION BANK</button>
+          <button class="to-acc-btn" id="to-sbi" onclick="selectToAccount('SBI')">🏛 SBI</button>
+          <button class="to-acc-btn" id="to-cash" onclick="selectToAccount('CASH')">💵 CASH</button>
+        </div>
+      </div>
+      <div class="form-group" id="type-group">
         <label class="form-label">Type</label>
         <div class="seg-group">
           <button class="seg-btn" id="type-income" onclick="selectType('Income')">↑ INCOME</button>
@@ -588,9 +669,9 @@ select.form-input option{background:var(--card);color:var(--text);}
         <select class="form-input" id="txn-category">
           <option value="">Select category...</option>
           <option>Food</option><option>Transport</option><option>Savings</option>
-          <option>Bills</option><option>Education</option><option>Healthcare</option>c:\Users\haris\Downloads\Gemini_Generated_Image_lzav06lzav06lzav.png
+          <option>Bills</option><option>Education</option><option>Healthcare</option>
           <option>Entertainment</option><option>Shopping</option><option>Investment</option>
-          <option>Salary</option><option>Chit</option><option>Others</option>
+          <option>Salary</option><option>Chit</option><option>Transfer</option><option>Others</option>
         </select>
       </div>
       <div class="form-group">
@@ -678,10 +759,20 @@ select.form-input option{background:var(--card);color:var(--text);}
             <button class="filter-seg-btn" data-type="Income" onclick="toggleTypeFilter(this)">INCOME</button>
             <button class="filter-seg-btn" data-type="Expense" onclick="toggleTypeFilter(this)">EXPENSE</button>
           </div>
+          <div class="filter-section-label">Options</div>
+          <div class="toggle-row" style="margin-bottom:0;">
+            <label>
+              <input type="checkbox" id="report-include-st">
+              Include Self Transfers
+            </label>
+          </div>
           <button class="btn-primary" onclick="applyReportFilter()" style="margin-top:16px;">APPLY FILTER</button>
         </div>
       </div>
       <div id="report-results"></div>
+      <button class="btn-download" id="download-report-btn" onclick="downloadReport()" style="display:none;">
+        📄 Download Report (PDF)
+      </button>
     </div>
   </div>
 
@@ -748,9 +839,13 @@ let state = {
   autoLockTimer: null,
   selectedAccount: '',
   selectedType: '',
+  selectedToAccount: '',
+  isSelfTransfer: false,
   filterAcc: 'ALL',
   filterType: 'ALL',
-  isLoading: false
+  isLoading: false,
+  lastReportTxns: null,
+  lastReportMeta: null
 };
 
 /* ============================================================
@@ -1166,7 +1261,7 @@ async function sheetsAPPEND(values) {
   try {
     const token = await ensureOAuth();
 
-    const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}/values/${CONFIG.SHEET_NAME}!A:I:append?valueInputOption=USER_ENTERED`;
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}/values/${CONFIG.SHEET_NAME}!A:J:append?valueInputOption=USER_ENTERED`;
 
     const res = await fetch(url, {
       method: "POST",
@@ -1201,7 +1296,7 @@ async function sheetsUPDATE(rowIndex, values) {
       throw new Error("Row index is missing!");
     }
 
-    const range = `${CONFIG.SHEET_NAME}!A${rowIndex}:I${rowIndex}`;
+    const range = `${CONFIG.SHEET_NAME}!A${rowIndex}:J${rowIndex}`;
 
     console.log("Updating range:", range);
     console.log("Values:", values);
@@ -1314,6 +1409,7 @@ function rowToTxn(row,index){
     amount:parseFloat(row[6])||0,
     paymentMode:row[7]||'',
     createdAt:row[8]||'',
+    selfTransferInd:parseInt(row[9])||0,
     _rowIndex:index+2 // +2 because row 1 = header, index already adjusted in caller
   };
 }
@@ -1371,10 +1467,10 @@ function generateId(txns){
 /* ============================================================
    DASHBOARD RENDER
    ============================================================ */
-function calcBalances(){
+function calcBalances(includeST){
   const bal={union:0,sbi:0,cash:0};
   
-  // Add initial balances (rows 2-4)
+  // Add initial balances (rows 2-4) — always include these
   if (state.initialBalances) {
     state.initialBalances.forEach(t=>{
       const amt=t.type==='Income'?t.amount:-t.amount;
@@ -1386,6 +1482,7 @@ function calcBalances(){
   
   // Add transactions (from row 5 onwards)
   state.transactions.forEach(t=>{
+    if(!includeST && t.selfTransferInd===1) return;
     const amt=t.type==='Income'?t.amount:-t.amount;
     if(t.account==='UNION BANK') bal.union+=amt;
     else if(t.account==='SBI') bal.sbi+=amt;
@@ -1393,12 +1490,36 @@ function calcBalances(){
   });
   return bal;
 }
-function calcMonthSummary(){
+
+function calcOpeningBalance(includeST){
+  const now=new Date();
+  const m=String(now.getMonth()+1).padStart(2,'0');
+  const y=String(now.getFullYear());
+  let net=0;
+  // Always include initial balances
+  if(state.initialBalances){
+    state.initialBalances.forEach(t=>{
+      net += t.type==='Income'?t.amount:-t.amount;
+    });
+  }
+  // Add transactions before this month
+  state.transactions.forEach(t=>{
+    if(!includeST && t.selfTransferInd===1) return;
+    const [d,tm,ty]=t.date.split('-');
+    // Before this month = earlier year OR same year but earlier month
+    const before=(ty<y)||(ty===y&&tm<m);
+    if(before) net += t.type==='Income'?t.amount:-t.amount;
+  });
+  return net;
+}
+
+function calcMonthSummary(includeST){
   const now=new Date();
   const m=String(now.getMonth()+1).padStart(2,'0');
   const y=String(now.getFullYear());
   let inc=0,exp=0;
   state.transactions.forEach(t=>{
+    if(!includeST && t.selfTransferInd===1) return;
     const [d,tm,ty]=t.date.split('-');
     if(tm===m&&ty===y){
       if(t.type==='Income') inc+=t.amount;
@@ -1409,9 +1530,12 @@ function calcMonthSummary(){
 }
 
 function renderDashboard(){
-  const bal=calcBalances();
+  const includeST = document.getElementById('dash-include-st')?.checked || false;
+  const bal=calcBalances(includeST);
   const total=bal.union+bal.sbi+bal.cash;
-  const mo=calcMonthSummary();
+  const mo=calcMonthSummary(includeST);
+  const openingBal=calcOpeningBalance(includeST);
+  const currentBal=openingBal+mo.income-mo.expense;
   const recent=[...state.transactions].reverse().slice(0,5);
 
   document.getElementById('account-cards').innerHTML=`
@@ -1429,9 +1553,13 @@ function renderDashboard(){
     </div>
   `;
   document.getElementById('summary-cards').innerHTML=`
-    <div class="summary-card">
-      <div class="summary-label">Total Balance</div>
-      <div class="summary-value ${total<0?'expense':''}">${formatINR(total)}</div>
+    <div class="summary-card opening">
+      <div class="summary-label">Opening Balance</div>
+      <div class="summary-value blue">${formatINR(openingBal)}</div>
+    </div>
+    <div class="summary-card current">
+      <div class="summary-label">Current Balance</div>
+      <div class="summary-value purple">${formatINR(currentBal)}</div>
     </div>
     <div class="summary-card">
       <div class="summary-label">Income</div>
@@ -1441,7 +1569,7 @@ function renderDashboard(){
       <div class="summary-label">Expense</div>
       <div class="summary-value expense">${formatINR(mo.expense)}</div>
     </div>
-    <div class="summary-card">
+    <div class="summary-card" style="grid-column:1/-1;">
       <div class="summary-label">Net Savings</div>
       <div class="summary-value ${mo.net<0?'expense':'income'}">${formatINR(mo.net)}</div>
     </div>
@@ -1461,7 +1589,7 @@ function renderDashboard(){
     <div class="txn-item">
       <span class="account-badge ${accountClass(t.account)}">${t.account==='UNION BANK'?'UB':t.account}</span>
       <div class="txn-info">
-        <div class="txn-desc">${escHtml(t.description)}</div>
+        <div class="txn-desc">${escHtml(t.description)}${t.selfTransferInd===1?'<span class="st-badge">↔ TRANSFER</span>':''}</div>
         <div class="txn-meta">${fmtDisplayDate(t.date)} · ${escHtml(t.category)}</div>
       </div>
       <div class="txn-amount ${t.type==='Income'?'income':'expense'}">${t.type==='Income'?'+':'-'}${formatINR(t.amount)}</div>
@@ -1495,7 +1623,7 @@ function renderHistory(query=''){
       <div class="history-card-top">
         <span class="account-badge ${accountClass(t.account)}">${t.account==='UNION BANK'?'UB':t.account}</span>
         <div class="history-card-info">
-          <div class="history-card-desc">${escHtml(t.description)}</div>
+          <div class="history-card-desc">${escHtml(t.description)}${t.selfTransferInd===1?'<span class="st-badge">↔ TRANSFER</span>':''}</div>
           <div class="history-card-meta">${fmtDisplayDate(t.date)} · ${escHtml(t.category)} · ${escHtml(t.paymentMode)}</div>
         </div>
         <div class="history-card-amount ${t.type==='Income'?'income':'expense'}">${t.type==='Income'?'+':'-'}${formatINR(t.amount)}</div>
@@ -1523,6 +1651,8 @@ function setAddDefaults(){
   document.getElementById('txn-payment').value='';
   state.selectedAccount='';
   state.selectedType='';
+  state.selectedToAccount='';
+  state.isSelfTransfer=false;
   ['acc-union','acc-sbi','acc-cash'].forEach(id=>{
     const btn=document.getElementById(id);
     btn.classList.remove('active','union-sel','sbi-sel','cash-sel');
@@ -1530,6 +1660,20 @@ function setAddDefaults(){
   ['type-income','type-expense'].forEach(id=>{
     document.getElementById(id).classList.remove('active','income-sel','expense-sel');
   });
+  // Reset self-transfer UI
+  const stChk=document.getElementById('self-transfer-chk');
+  if(stChk) stChk.checked=false;
+  const toGrp=document.getElementById('to-account-group');
+  if(toGrp) toGrp.classList.remove('show');
+  const typeGrp=document.getElementById('type-group');
+  if(typeGrp) typeGrp.style.display='';
+  // Reset to-account buttons
+  ['to-union','to-sbi','to-cash'].forEach(id=>{
+    const btn=document.getElementById(id);
+    if(btn) btn.classList.remove('active','union-sel','sbi-sel','cash-sel');
+  });
+  // Show all to-account buttons
+  updateToAccountButtons();
   state.editId=null;
   document.getElementById('save-btn').textContent='SAVE TRANSACTION';
   document.getElementById('add-page-title').textContent='Add Transaction';
@@ -1547,6 +1691,71 @@ function selectAccount(acc){
   });
   const btn=document.getElementById(ids[acc]);
   btn.classList.add('active',cls[acc]);
+  // If self-transfer is active, deselect To Account if same as From
+  if(state.isSelfTransfer){
+    if(state.selectedToAccount===acc) {
+      state.selectedToAccount='';
+      ['to-union','to-sbi','to-cash'].forEach(id=>{
+        const b=document.getElementById(id);
+        if(b) b.classList.remove('active','union-sel','sbi-sel','cash-sel');
+      });
+    }
+    updateToAccountButtons();
+  }
+}
+
+function updateToAccountButtons(){
+  const allAccs=['UNION BANK','SBI','CASH'];
+  const toIds={'UNION BANK':'to-union','SBI':'to-sbi','CASH':'to-cash'};
+  allAccs.forEach(a=>{
+    const btn=document.getElementById(toIds[a]);
+    if(!btn) return;
+    if(a===state.selectedAccount){
+      btn.style.display='none';
+    } else {
+      btn.style.display='';
+    }
+  });
+}
+
+function toggleSelfTransfer(){
+  const chk=document.getElementById('self-transfer-chk');
+  state.isSelfTransfer=chk.checked;
+  const toGrp=document.getElementById('to-account-group');
+  const typeGrp=document.getElementById('type-group');
+  if(state.isSelfTransfer){
+    toGrp.classList.add('show');
+    typeGrp.style.display='none';
+    // Auto-select Transfer category
+    document.getElementById('txn-category').value='Transfer';
+    updateToAccountButtons();
+    // Clear to-account selection
+    state.selectedToAccount='';
+    ['to-union','to-sbi','to-cash'].forEach(id=>{
+      const b=document.getElementById(id);
+      if(b) b.classList.remove('active','union-sel','sbi-sel','cash-sel');
+    });
+  } else {
+    toGrp.classList.remove('show');
+    typeGrp.style.display='';
+    state.selectedToAccount='';
+    // Clear Transfer category if it was auto-set
+    if(document.getElementById('txn-category').value==='Transfer'){
+      document.getElementById('txn-category').value='';
+    }
+  }
+}
+
+function selectToAccount(acc){
+  state.selectedToAccount=acc;
+  const cls={'UNION BANK':'union-sel','SBI':'sbi-sel','CASH':'cash-sel'};
+  const ids={'UNION BANK':'to-union','SBI':'to-sbi','CASH':'to-cash'};
+  ['UNION BANK','SBI','CASH'].forEach(a=>{
+    const btn=document.getElementById(ids[a]);
+    if(btn) btn.classList.remove('active','union-sel','sbi-sel','cash-sel');
+  });
+  const btn=document.getElementById(ids[acc]);
+  if(btn) btn.classList.add('active',cls[acc]);
 }
 function selectType(type){
   state.selectedType=type;
@@ -1563,6 +1772,7 @@ function editTransaction(id){
   if(!t) return;
   switchTab('add');
   state.editId=id;
+  state.isSelfTransfer=false; // Editing always as single record
   document.getElementById('add-page-title').textContent='Edit Transaction';
   document.getElementById('save-btn').textContent='UPDATE TRANSACTION';
   document.getElementById('edit-mode-banner').classList.add('show');
@@ -1571,6 +1781,13 @@ function editTransaction(id){
   document.getElementById('txn-category').value=t.category;
   document.getElementById('txn-amount').value=t.amount;
   document.getElementById('txn-payment').value=t.paymentMode;
+  // Reset self-transfer UI for edit mode
+  const stChk=document.getElementById('self-transfer-chk');
+  if(stChk) stChk.checked=false;
+  const toGrp=document.getElementById('to-account-group');
+  if(toGrp) toGrp.classList.remove('show');
+  const typeGrp=document.getElementById('type-group');
+  if(typeGrp) typeGrp.style.display='';
   selectAccount(t.account);
   selectType(t.type);
 }
@@ -1583,15 +1800,24 @@ async function saveTransaction(){
   const amt=parseFloat(document.getElementById('txn-amount').value);
   const pay=document.getElementById('txn-payment').value;
   const acc=state.selectedAccount;
+  const isST=state.isSelfTransfer;
+  const toAcc=state.selectedToAccount;
   const type=state.selectedType;
 
   if(!date){showToast('Please select a date','error');return;}
   if(!desc){showToast('Please enter a description','error');return;}
   if(!acc){showToast('Please select an account','error');return;}
-  if(!type){showToast('Please select Income or Expense','error');return;}
   if(!cat){showToast('Please select a category','error');return;}
   if(!amt||amt<=0){showToast('Please enter a valid amount','error');return;}
   if(!pay){showToast('Please select payment mode','error');return;}
+
+  // Self-transfer specific validations
+  if(isST){
+    if(!toAcc){showToast('Please select a To Account','error');return;}
+    if(acc===toAcc){showToast('From and To accounts must be different','error');return;}
+  } else {
+    if(!type){showToast('Please select Income or Expense','error');return;}
+  }
 
   const btn=document.getElementById('save-btn');
   const origText=btn.textContent;
@@ -1600,21 +1826,41 @@ async function saveTransaction(){
 
   try{
     if(state.editId){
-      // UPDATE
+      // UPDATE (single record edit — keep as is, just update selfTransferInd)
       const t=state.transactions.find(x=>x.id===state.editId);
       if(!t) throw new Error('Transaction not found');
-      const row=[t.id,date,desc,acc,cat,type,amt,pay,t.createdAt];
+      const row=[t.id,date,desc,acc,cat,type,amt,pay,t.createdAt,t.selfTransferInd||0];
       await sheetsUPDATE(t._rowIndex,row);
       Object.assign(t,{date,description:desc,account:acc,category:cat,type,amount:amt,paymentMode:pay});
       localStorage.setItem('mmt_cache',JSON.stringify(state.transactions));
       showToast('Transaction Updated! ✓','success');
+    } else if(isST){
+      // SELF TRANSFER — insert TWO records
+      const createdAt=new Date().toISOString();
+      const id1=generateId(state.transactions);
+      // Insert record 1: Expense from From Account
+      const row1=[id1,date,desc,acc,'Transfer','Expense',amt,pay,createdAt,1];
+      await sheetsAPPEND(row1);
+      const txn1={id:id1,date,description:desc,account:acc,category:'Transfer',type:'Expense',amount:amt,paymentMode:pay,createdAt,selfTransferInd:1,_rowIndex:state.transactions.length+5};
+      state.transactions.push(txn1);
+
+      // Generate next ID after first insert
+      const id2=generateId(state.transactions);
+      // Insert record 2: Income to To Account
+      const row2=[id2,date,desc,toAcc,'Transfer','Income',amt,pay,createdAt,1];
+      await sheetsAPPEND(row2);
+      const txn2={id:id2,date,description:desc,account:toAcc,category:'Transfer',type:'Income',amount:amt,paymentMode:pay,createdAt,selfTransferInd:1,_rowIndex:state.transactions.length+5};
+      state.transactions.push(txn2);
+
+      localStorage.setItem('mmt_cache',JSON.stringify(state.transactions));
+      showToast('Self Transfer Saved! ✓ (2 records)','success');
     } else {
-      // INSERT
+      // INSERT normal
       const id=generateId(state.transactions);
       const createdAt=new Date().toISOString();
-      const row=[id,date,desc,acc,cat,type,amt,pay,createdAt];
+      const row=[id,date,desc,acc,cat,type,amt,pay,createdAt,0];
       await sheetsAPPEND(row);
-      const newTxn={id,date,description:desc,account:acc,category:cat,type,amount:amt,paymentMode:pay,createdAt,_rowIndex:state.transactions.length+5};
+      const newTxn={id,date,description:desc,account:acc,category:cat,type,amount:amt,paymentMode:pay,createdAt,selfTransferInd:0,_rowIndex:state.transactions.length+5};
       state.transactions.push(newTxn);
       localStorage.setItem('mmt_cache',JSON.stringify(state.transactions));
       showToast('Transaction Saved! ✓','success');
@@ -1715,16 +1961,22 @@ function toggleFilterPanel(){
 
 function applyReportFilter(){
   const periodVal=[...document.querySelectorAll('input[name=period]')].find(r=>r.checked)?.value||'month';
+  const includeST=document.getElementById('report-include-st')?.checked||false;
   let txns=state.transactions;
+
+  // Calculate period bounds for opening balance
+  let periodStartISO=null;
 
   // Period filter
   if(periodVal==='date'){
     const d=isoToDDMMYYYY(document.getElementById('filter-date').value);
+    periodStartISO=document.getElementById('filter-date').value;
     txns=txns.filter(t=>t.date===d);
   } else if(periodVal==='range'){
     const from=document.getElementById('filter-from').value;
     const to=document.getElementById('filter-to').value;
     if(from&&to){
+      periodStartISO=from;
       txns=txns.filter(t=>{
         const iso=ddmmyyyyToISO(t.date);
         return iso>=from&&iso<=to;
@@ -1733,35 +1985,58 @@ function applyReportFilter(){
   } else if(periodVal==='month'){
     const m=document.getElementById('filter-month').value;
     const y=document.getElementById('filter-month-year').value;
+    periodStartISO=`${y}-${m}-01`;
     txns=txns.filter(t=>{
       const [d,tm,ty]=t.date.split('-');
       return tm===m&&ty===y;
     });
   } else if(periodVal==='year'){
     const y=document.getElementById('filter-year').value;
+    periodStartISO=`${y}-01-01`;
     txns=txns.filter(t=>{
       const [d,m,ty]=t.date.split('-');
       return ty===y;
     });
   }
 
+  // Self-transfer filter
+  if(!includeST) txns=txns.filter(t=>t.selfTransferInd!==1);
+
   // Account filter
   if(state.filterAcc!=='ALL') txns=txns.filter(t=>t.account===state.filterAcc);
   // Type filter
   if(state.filterType!=='ALL') txns=txns.filter(t=>t.type===state.filterType);
 
-  renderReport(txns);
+  // Calculate opening balance for the period
+  let openingBal=0;
+  if(periodStartISO){
+    // Sum initial balances + all transactions before period start
+    if(state.initialBalances){
+      state.initialBalances.forEach(t=>{openingBal+=t.type==='Income'?t.amount:-t.amount;});
+    }
+    state.transactions.forEach(t=>{
+      if(!includeST && t.selfTransferInd===1) return;
+      if(state.filterAcc!=='ALL' && t.account!==state.filterAcc) return;
+      const iso=ddmmyyyyToISO(t.date);
+      if(iso<periodStartISO) openingBal+=t.type==='Income'?t.amount:-t.amount;
+    });
+  }
+
+  renderReport(txns, openingBal, includeST);
 }
 
-function renderReport(txns){
+function renderReport(txns, openingBal=0, includeST=false){
   const res=document.getElementById('report-results');
+  const dlBtn=document.getElementById('download-report-btn');
   if(txns.length===0){
     res.innerHTML=`<div class="empty-state"><div class="empty-state-icon">📊</div><div class="empty-state-title">No data for selected filters</div></div>`;
+    if(dlBtn) dlBtn.style.display='none';
     return;
   }
   const inc=txns.filter(t=>t.type==='Income').reduce((s,t)=>s+t.amount,0);
   const exp=txns.filter(t=>t.type==='Expense').reduce((s,t)=>s+t.amount,0);
   const net=inc-exp;
+  const closingBal=openingBal+inc-exp;
 
   // Account breakdown
   const accMap={};
@@ -1771,18 +2046,53 @@ function renderReport(txns){
     accMap[a]={i:ai,e:ae,n:ai-ae};
   });
 
-  // Category breakdown
-  const catMap={};
+  // Category breakdown — split into Income/Expense/Net
+  const incCatMap={}, expCatMap={}, netCatMap={};
   txns.forEach(t=>{
-    if(!catMap[t.category]) catMap[t.category]=0;
-    catMap[t.category]+=t.amount;
+    if(t.type==='Income'){
+      incCatMap[t.category]=(incCatMap[t.category]||0)+t.amount;
+    } else {
+      expCatMap[t.category]=(expCatMap[t.category]||0)+t.amount;
+    }
   });
-  const cats=Object.entries(catMap).sort((a,b)=>b[1]-a[1]);
-  const maxCat=cats[0]?cats[0][1]:1;
+  // Net by category (union of both)
+  const allCats=new Set([...Object.keys(incCatMap),...Object.keys(expCatMap)]);
+  allCats.forEach(cat=>{
+    netCatMap[cat]=(incCatMap[cat]||0)-(expCatMap[cat]||0);
+  });
+  const incCats=Object.entries(incCatMap).sort((a,b)=>b[1]-a[1]);
+  const expCats=Object.entries(expCatMap).sort((a,b)=>b[1]-a[1]);
+  const netCats=Object.entries(netCatMap).sort((a,b)=>b[1]-a[1]);
+  const maxInc=incCats[0]?incCats[0][1]:1;
+  const maxExp=expCats[0]?expCats[0][1]:1;
 
   const txnList=[...txns].reverse();
 
+  // Store for PDF export
+  state.lastReportTxns=txnList;
+  state.lastReportMeta={inc,exp,net,openingBal,closingBal,accMap,incCats,expCats,netCats,includeST};
+
+  function catBarHTML(cat,amt,maxAmt,fillClass,amtClass){
+    return `<div class="cat-row">
+      <div class="cat-row-top">
+        <span class="cat-name">${escHtml(cat)}</span>
+        <span class="cat-amount ${amtClass}">${formatINR(amt)}</span>
+      </div>
+      <div class="cat-bar-bg"><div class="cat-bar-fill ${fillClass}" style="width:${Math.round(Math.abs(amt)/maxAmt*100)}%"></div></div>
+    </div>`;
+  }
+
   res.innerHTML=`
+    <div class="report-balance-row">
+      <div class="report-balance-card opening">
+        <div class="rbc-label">Opening Balance</div>
+        <div class="rbc-value blue">${formatINR(openingBal)}</div>
+      </div>
+      <div class="report-balance-card closing">
+        <div class="rbc-label">Closing Balance</div>
+        <div class="rbc-value purple">${formatINR(closingBal)}</div>
+      </div>
+    </div>
     <div class="report-summary-grid">
       <div class="report-summary-card income-card">
         <div class="rsc-label">Total Income</div>
@@ -1814,33 +2124,147 @@ function renderReport(txns){
           </tr>`).join('')}
       </table>
     </div>
-    ${cats.length?`
     <div class="card">
       <div class="section-title" style="margin-top:0;">Category Breakdown</div>
-      ${cats.map(([cat,amt])=>`
-        <div class="cat-row">
-          <div class="cat-row-top">
+      ${incCats.length?`
+      <div class="cat-section">
+        <div class="cat-section-title income">📈 Income by Category</div>
+        ${incCats.map(([cat,amt])=>catBarHTML(cat,amt,maxInc,'income-fill','income-color')).join('')}
+      </div>`:''}
+      ${expCats.length?`
+      <div class="cat-section">
+        <div class="cat-section-title expense">📉 Expense by Category</div>
+        ${expCats.map(([cat,amt])=>catBarHTML(cat,amt,maxExp,'expense-fill','expense-color')).join('')}
+      </div>`:''}
+      ${netCats.length?`
+      <div class="cat-section">
+        <div class="cat-section-title net">📊 Net by Category</div>
+        ${netCats.map(([cat,amt])=>`
+          <div class="cat-net-row">
             <span class="cat-name">${escHtml(cat)}</span>
-            <span class="cat-amount">${formatINR(amt)}</span>
-          </div>
-          <div class="cat-bar-bg"><div class="cat-bar-fill" style="width:${Math.round(amt/maxCat*100)}%"></div></div>
-        </div>
-      `).join('')}
-    </div>`:''}
+            <span style="font-weight:700;color:${amt>=0?'var(--income)':'var(--expense)'};">${formatINR(amt)}</span>
+          </div>`).join('')}
+      </div>`:''}
+    </div>
     <div class="section-title">Transactions (${txnList.length})</div>
     ${txnList.map(t=>`
       <div class="txn-item">
         <span class="account-badge ${accountClass(t.account)}">${t.account==='UNION BANK'?'UB':t.account}</span>
         <div class="txn-info">
-          <div class="txn-desc">${escHtml(t.description)}</div>
+          <div class="txn-desc">${escHtml(t.description)}${t.selfTransferInd===1?'<span class="st-badge">↔ TRANSFER</span>':''}</div>
           <div class="txn-meta">${fmtDisplayDate(t.date)} · ${escHtml(t.category)} · ${escHtml(t.paymentMode)}</div>
         </div>
         <div class="txn-amount ${t.type==='Income'?'income':'expense'}">${t.type==='Income'?'+':'-'}${formatINR(t.amount)}</div>
       </div>
     `).join('')}
   `;
+
+  if(dlBtn) dlBtn.style.display='';
   // Scroll to results
   document.getElementById('page-reports').scrollTo({top:document.getElementById('report-results').offsetTop-80,behavior:'smooth'});
+}
+
+/* ============================================================
+   PDF / PRINT REPORT
+   ============================================================ */
+function downloadReport(){
+  const meta=state.lastReportMeta;
+  const txns=state.lastReportTxns;
+  if(!meta||!txns) return;
+
+  const {inc,exp,net,openingBal,closingBal,accMap,incCats,expCats,netCats}=meta;
+
+  function inr(n){return formatINR(n);}
+  function accLabel(a){return a==='UNION BANK'?'Union Bank':a==='SBI'?'SBI':'Cash';}
+
+  const html=`<!DOCTYPE html>
+<html><head>
+<meta charset="UTF-8">
+<title>Money Tracker Report</title>
+<style>
+  body{font-family:Arial,sans-serif;color:#212121;margin:0;padding:20px;font-size:13px;}
+  h1{font-size:20px;margin-bottom:4px;color:#1a1a1a;}
+  .sub{color:#666;font-size:12px;margin-bottom:20px;}
+  .section{margin-bottom:20px;}
+  .section-title{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#555;border-bottom:2px solid #eee;padding-bottom:6px;margin-bottom:10px;}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;}
+  .card{border:1px solid #ddd;border-radius:8px;padding:12px;}
+  .card-label{font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:#888;margin-bottom:4px;}
+  .card-value{font-size:17px;font-weight:700;}
+  .income{color:#2E7D32;} .expense{color:#C62828;} .blue{color:#1565C0;} .purple{color:#6200EE;}
+  table{width:100%;border-collapse:collapse;font-size:12px;}
+  th{background:#f5f5f5;padding:8px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:0.4px;color:#666;border-bottom:1px solid #ddd;}
+  td{padding:8px;border-bottom:1px solid #eee;}
+  .cat-row{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #f0f0f0;font-size:12px;}
+  .cat-row:last-child{border-bottom:none;}
+  .net-pos{color:#2E7D32;font-weight:700;} .net-neg{color:#C62828;font-weight:700;}
+  .badge{display:inline-block;padding:2px 6px;border-radius:4px;font-size:10px;font-weight:700;color:#fff;}
+  .union{background:#1565C0;} .sbi{background:#B71C1C;} .cash{background:#2E7D32;}
+  .txn-row{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid #f0f0f0;font-size:12px;}
+  .txn-info{flex:1;}
+  .txn-desc{font-weight:600;color:#212121;}
+  .txn-meta{font-size:10px;color:#888;}
+  .txn-amt{font-weight:700;}
+  .st-tag{font-size:9px;background:#FFF3E0;border:1px solid #FFA726;color:#E65100;padding:1px 4px;border-radius:3px;margin-left:4px;}
+  @media print{body{padding:10px;}button{display:none;}}
+</style>
+</head><body>
+<h1>💰 My Money Tracker — Report</h1>
+<div class="sub">Generated on ${new Date().toLocaleDateString('en-IN',{day:'numeric',month:'long',year:'numeric'})}</div>
+
+<div class="section">
+  <div class="section-title">Balance Summary</div>
+  <div class="grid">
+    <div class="card"><div class="card-label">Opening Balance</div><div class="card-value blue">${inr(openingBal)}</div></div>
+    <div class="card"><div class="card-label">Closing Balance</div><div class="card-value purple">${inr(closingBal)}</div></div>
+    <div class="card"><div class="card-label">Total Income</div><div class="card-value income">${inr(inc)}</div></div>
+    <div class="card"><div class="card-label">Total Expense</div><div class="card-value expense">${inr(exp)}</div></div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-title">Account Breakdown</div>
+  <table>
+    <tr><th>Account</th><th>Income</th><th>Expense</th><th>Net</th></tr>
+    ${['UNION BANK','SBI','CASH'].map(a=>`
+    <tr>
+      <td><span class="badge ${accountClass(a)}">${accLabel(a)}</span></td>
+      <td class="income">${inr(accMap[a].i)}</td>
+      <td class="expense">${inr(accMap[a].e)}</td>
+      <td class="${accMap[a].n>=0?'net-pos':'net-neg'}">${inr(accMap[a].n)}</td>
+    </tr>`).join('')}
+  </table>
+</div>
+
+<div class="section">
+  <div class="section-title">Category Breakdown</div>
+  ${incCats.length?`<div style="font-size:11px;font-weight:700;color:#2E7D32;margin-bottom:6px;">📈 Income by Category</div>
+  ${incCats.map(([c,a])=>`<div class="cat-row"><span>${c}</span><span class="income">${inr(a)}</span></div>`).join('')}`:''}
+  ${expCats.length?`<div style="font-size:11px;font-weight:700;color:#C62828;margin:10px 0 6px;">📉 Expense by Category</div>
+  ${expCats.map(([c,a])=>`<div class="cat-row"><span>${c}</span><span class="expense">${inr(a)}</span></div>`).join('')}`:''}
+  ${netCats.length?`<div style="font-size:11px;font-weight:700;color:#1565C0;margin:10px 0 6px;">📊 Net by Category</div>
+  ${netCats.map(([c,a])=>`<div class="cat-row"><span>${c}</span><span class="${a>=0?'net-pos':'net-neg'}">${inr(a)}</span></div>`).join('')}`:''}
+</div>
+
+<div class="section">
+  <div class="section-title">Transactions (${txns.length})</div>
+  ${txns.map(t=>`
+  <div class="txn-row">
+    <span class="badge ${accountClass(t.account)}">${t.account==='UNION BANK'?'UB':t.account}</span>
+    <div class="txn-info">
+      <div class="txn-desc">${escHtml(t.description)}${t.selfTransferInd===1?'<span class="st-tag">↔ TRANSFER</span>':''}</div>
+      <div class="txn-meta">${fmtDisplayDate(t.date)} · ${escHtml(t.category)} · ${escHtml(t.paymentMode)}</div>
+    </div>
+    <div class="txn-amt ${t.type==='Income'?'income':'expense'}">${t.type==='Income'?'+':'-'}${inr(t.amount)}</div>
+  </div>`).join('')}
+</div>
+<script>window.onload=function(){window.print();}<\/script>
+</body></html>`;
+
+  const win=window.open('','_blank');
+  if(!win){showToast('Popup blocked — allow popups to download PDF','error');return;}
+  win.document.write(html);
+  win.document.close();
 }
 
 /* ============================================================
