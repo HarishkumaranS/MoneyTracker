@@ -369,6 +369,39 @@ select.form-input option{background:var(--card);color:var(--text);}
 /* Chevron toggle */
 .chevron{transition:transform 0.2s;}
 .chevron.open{transform:rotate(180deg);}
+/* Self-Transfer badge */
+.transfer-badge{display:inline-flex;padding:2px 7px;border-radius:5px;font-size:9px;font-weight:700;background:rgba(187,134,252,0.2);color:var(--accent);border:1px solid rgba(187,134,252,0.4);margin-left:6px;vertical-align:middle;}
+
+/* Checkbox row */
+.check-row{display:flex;align-items:center;gap:8px;padding:10px 0;cursor:pointer;user-select:none;}
+.check-row input[type=checkbox]{width:18px;height:18px;accent-color:var(--accent);cursor:pointer;flex-shrink:0;}
+.check-row label{font-size:13px;color:var(--text-secondary);cursor:pointer;font-weight:500;}
+
+/* To-account dropdown group */
+#to-account-group{display:none;}
+
+/* PDF button */
+.btn-pdf{width:100%;height:48px;border-radius:10px;background:rgba(244,67,54,0.12);border:1.5px solid rgba(244,67,54,0.4);color:#F44336;font-size:14px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;margin-top:10px;}
+.btn-pdf:active{opacity:0.75;}
+
+/* Opening/Closing balance cards */
+.report-summary-card.ob-card{background:rgba(255,193,7,0.1);border:1px solid rgba(255,193,7,0.3);}
+.report-summary-card.cb-card{background:rgba(156,39,176,0.1);border:1px solid rgba(156,39,176,0.3);}
+.rsc-value.ob{color:#FFC107;}
+.rsc-value.cb{color:#9C27B0;}
+
+/* Category breakdown sub-sections */
+.cat-section-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;padding:8px 0 6px;margin-top:4px;}
+.cat-section-title.income-hdr{color:var(--income);}
+.cat-section-title.expense-hdr{color:var(--expense);}
+.cat-section-title.net-hdr{color:#2196F3;}
+.cat-bar-fill.inc{background:linear-gradient(90deg,var(--income),#81C784);}
+.cat-bar-fill.exp{background:linear-gradient(90deg,var(--expense),#EF9A9A);}
+.cat-bar-fill.net{background:linear-gradient(90deg,#2196F3,#90CAF9);}
+.cat-amount.income{color:var(--income);}
+.cat-amount.expense{color:var(--expense);}
+.cat-amount.net{color:#2196F3;}
+
 </style>
 </head>
 <body>
@@ -542,9 +575,18 @@ select.form-input option{background:var(--card);color:var(--text);}
           <div class="skeleton" style="width:160px;flex-shrink:0;border-radius:14px;"></div>
           <div class="skeleton" style="width:160px;flex-shrink:0;border-radius:14px;"></div>
         </div>
-        <div class="section-title">This Month</div>
+        <div class="section-title" style="display:flex;align-items:center;justify-content:space-between;">
+          <span>This Month</span>
+          <label class="check-row" style="margin:0;padding:0;" title="Toggle self-transfer inclusion">
+            <input type="checkbox" id="dash-self-transfer" onchange="toggleDashSelfTransfer()">
+            <label for="dash-self-transfer" style="font-size:11px;">Include Self Transfers</label>
+          </label>
+        </div>
         <div class="summary-grid" id="summary-cards">
           <div class="skeleton"></div><div class="skeleton"></div>
+          <div class="skeleton"></div><div class="skeleton"></div>
+        </div>
+        <div class="summary-grid" id="balance-cards" style="margin-top:10px;">
           <div class="skeleton"></div><div class="skeleton"></div>
         </div>
         <div class="section-title">Recent Transactions</div>
@@ -608,6 +650,22 @@ select.form-input option{background:var(--card);color:var(--text);}
          <option>Debit Card</option><option>Bank Transfer</option>
         </select>
       </div>
+      <!-- Self Transfer Checkbox -->
+      <div class="card" style="padding:12px 16px;margin-bottom:12px;">
+        <label class="check-row" style="padding:4px 0;">
+          <input type="checkbox" id="self-transfer-chk" onchange="toggleSelfTransferForm()">
+          <label for="self-transfer-chk" style="font-size:14px;font-weight:600;color:var(--text);">🔄 Self Transfer</label>
+        </label>
+        <div id="to-account-group" style="margin-top:10px;">
+          <div class="form-label">To Account</div>
+          <div class="seg-group" id="to-acc-seg">
+            <button class="seg-btn account-seg" id="to-acc-union" onclick="selectToAccount('UNION BANK')">🏦 UNION BANK</button>
+            <button class="seg-btn account-seg" id="to-acc-sbi" onclick="selectToAccount('SBI')">🏛 SBI</button>
+            <button class="seg-btn account-seg" id="to-acc-cash" onclick="selectToAccount('CASH')">💵 CASH</button>
+          </div>
+        </div>
+      </div>
+
       <button class="btn-primary" id="save-btn" onclick="saveTransaction()" style="margin-top:8px;">SAVE TRANSACTION</button>
       <div style="height:20px;"></div>
     </div>
@@ -678,7 +736,12 @@ select.form-input option{background:var(--card);color:var(--text);}
             <button class="filter-seg-btn" data-type="Income" onclick="toggleTypeFilter(this)">INCOME</button>
             <button class="filter-seg-btn" data-type="Expense" onclick="toggleTypeFilter(this)">EXPENSE</button>
           </div>
-          <button class="btn-primary" onclick="applyReportFilter()" style="margin-top:16px;">APPLY FILTER</button>
+          <!-- Self Transfer Filter -->
+          <div class="check-row" style="margin-top:14px;">
+            <input type="checkbox" id="report-self-transfer">
+            <label for="report-self-transfer">Include Self Transfers</label>
+          </div>
+          <button class="btn-primary" onclick="applyReportFilter()" style="margin-top:12px;">APPLY FILTER</button>
         </div>
       </div>
       <div id="report-results"></div>
@@ -743,13 +806,16 @@ let state = {
   fpFails: 0,
   pinAttempt: '',
   setupPinFirst: '',
-  setupPinStep: 1, // 1=enter, 2=confirm
+  setupPinStep: 1,
   editId: null,
   autoLockTimer: null,
   selectedAccount: '',
   selectedType: '',
+  selectedToAccount: '',
+  isSelfTransfer: false,
   filterAcc: 'ALL',
   filterType: 'ALL',
+  dashIncludeSelf: false,
   isLoading: false
 };
 
@@ -1166,7 +1232,7 @@ async function sheetsAPPEND(values) {
   try {
     const token = await ensureOAuth();
 
-    const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}/values/${CONFIG.SHEET_NAME}!A:I:append?valueInputOption=USER_ENTERED`;
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}/values/${CONFIG.SHEET_NAME}!A:J:append?valueInputOption=USER_ENTERED`;
 
     const res = await fetch(url, {
       method: "POST",
@@ -1201,7 +1267,7 @@ async function sheetsUPDATE(rowIndex, values) {
       throw new Error("Row index is missing!");
     }
 
-    const range = `${CONFIG.SHEET_NAME}!A${rowIndex}:I${rowIndex}`;
+    const range = `${CONFIG.SHEET_NAME}!A${rowIndex}:J${rowIndex}`;
 
     console.log("Updating range:", range);
     console.log("Values:", values);
@@ -1314,7 +1380,8 @@ function rowToTxn(row,index){
     amount:parseFloat(row[6])||0,
     paymentMode:row[7]||'',
     createdAt:row[8]||'',
-    _rowIndex:index+2 // +2 because row 1 = header, index already adjusted in caller
+    selfTransfer:parseInt(row[9])||0,  // column J: 1 = self transfer pair
+    _rowIndex:index+2
   };
 }
 if(localStorage.getItem("mmt_logged_in")){
@@ -1393,12 +1460,13 @@ function calcBalances(){
   });
   return bal;
 }
-function calcMonthSummary(){
+function calcMonthSummary(includeSelf){
   const now=new Date();
   const m=String(now.getMonth()+1).padStart(2,'0');
   const y=String(now.getFullYear());
   let inc=0,exp=0;
   state.transactions.forEach(t=>{
+    if(!includeSelf && t.selfTransfer===1) return;
     const [d,tm,ty]=t.date.split('-');
     if(tm===m&&ty===y){
       if(t.type==='Income') inc+=t.amount;
@@ -1408,10 +1476,57 @@ function calcMonthSummary(){
   return {income:inc,expense:exp,net:inc-exp};
 }
 
+/* Balance at start of current month (from initial + txns before this month) */
+function calcOpeningBalance(includeSelf){
+  const now=new Date();
+  const m=String(now.getMonth()+1).padStart(2,'0');
+  const y=String(now.getFullYear());
+  const firstDayISO=y+'-'+m+'-01';
+  let total=0;
+  // Initial balances always count
+  if(state.initialBalances){
+    state.initialBalances.forEach(t=>{
+      total += t.type==='Income'?t.amount:-t.amount;
+    });
+  }
+  // Txns strictly before this month
+  state.transactions.forEach(t=>{
+    if(!includeSelf && t.selfTransfer===1) return;
+    const iso=ddmmyyyyToISO(t.date);
+    if(iso<firstDayISO){
+      total += t.type==='Income'?t.amount:-t.amount;
+    }
+  });
+  return total;
+}
+
+/* Current total balance including this month's txns */
+function calcCurrentBalance(includeSelf){
+  let total=0;
+  if(state.initialBalances){
+    state.initialBalances.forEach(t=>{
+      total += t.type==='Income'?t.amount:-t.amount;
+    });
+  }
+  state.transactions.forEach(t=>{
+    if(!includeSelf && t.selfTransfer===1) return;
+    total += t.type==='Income'?t.amount:-t.amount;
+  });
+  return total;
+}
+
+function toggleDashSelfTransfer(){
+  state.dashIncludeSelf=document.getElementById('dash-self-transfer').checked;
+  renderDashboard();
+}
+
 function renderDashboard(){
+  const inc=state.dashIncludeSelf;
   const bal=calcBalances();
   const total=bal.union+bal.sbi+bal.cash;
-  const mo=calcMonthSummary();
+  const mo=calcMonthSummary(inc);
+  const openBal=calcOpeningBalance(inc);
+  const curBal=calcCurrentBalance(inc);
   const recent=[...state.transactions].reverse().slice(0,5);
 
   document.getElementById('account-cards').innerHTML=`
@@ -1444,6 +1559,16 @@ function renderDashboard(){
     <div class="summary-card">
       <div class="summary-label">Net Savings</div>
       <div class="summary-value ${mo.net<0?'expense':'income'}">${formatINR(mo.net)}</div>
+    </div>
+  `;
+  document.getElementById('balance-cards').innerHTML=`
+    <div class="summary-card">
+      <div class="summary-label">Opening Balance</div>
+      <div class="summary-value" style="color:#FFC107;">${formatINR(openBal)}</div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-label">Current Balance</div>
+      <div class="summary-value" style="color:var(--accent);">${formatINR(curBal)}</div>
     </div>
   `;
 
@@ -1495,7 +1620,7 @@ function renderHistory(query=''){
       <div class="history-card-top">
         <span class="account-badge ${accountClass(t.account)}">${t.account==='UNION BANK'?'UB':t.account}</span>
         <div class="history-card-info">
-          <div class="history-card-desc">${escHtml(t.description)}</div>
+          <div class="history-card-desc">${escHtml(t.description)}${t.selfTransfer===1?'<span class="transfer-badge">TRANSFER</span>':''}</div>
           <div class="history-card-meta">${fmtDisplayDate(t.date)} · ${escHtml(t.category)} · ${escHtml(t.paymentMode)}</div>
         </div>
         <div class="history-card-amount ${t.type==='Income'?'income':'expense'}">${t.type==='Income'?'+':'-'}${formatINR(t.amount)}</div>
@@ -1523,6 +1648,8 @@ function setAddDefaults(){
   document.getElementById('txn-payment').value='';
   state.selectedAccount='';
   state.selectedType='';
+  state.selectedToAccount='';
+  state.isSelfTransfer=false;
   ['acc-union','acc-sbi','acc-cash'].forEach(id=>{
     const btn=document.getElementById(id);
     btn.classList.remove('active','union-sel','sbi-sel','cash-sel');
@@ -1530,23 +1657,74 @@ function setAddDefaults(){
   ['type-income','type-expense'].forEach(id=>{
     document.getElementById(id).classList.remove('active','income-sel','expense-sel');
   });
+  // Reset self-transfer UI
+  const stChk=document.getElementById('self-transfer-chk');
+  if(stChk){stChk.checked=false;}
+  document.getElementById('to-account-group').style.display='none';
+  ['to-acc-union','to-acc-sbi','to-acc-cash'].forEach(id=>{
+    const b=document.getElementById(id);
+    if(b) b.classList.remove('active','union-sel','sbi-sel','cash-sel');
+  });
   state.editId=null;
   document.getElementById('save-btn').textContent='SAVE TRANSACTION';
   document.getElementById('add-page-title').textContent='Add Transaction';
   document.getElementById('edit-mode-banner').classList.remove('show');
 }
 
+/* Toggle self-transfer form visibility */
+function toggleSelfTransferForm(){
+  state.isSelfTransfer=document.getElementById('self-transfer-chk').checked;
+  document.getElementById('to-account-group').style.display=state.isSelfTransfer?'block':'none';
+  // Reset type buttons when self-transfer checked (they become auto-set)
+  if(state.isSelfTransfer){
+    ['type-income','type-expense'].forEach(id=>{
+      document.getElementById(id).classList.remove('active','income-sel','expense-sel');
+    });
+    state.selectedType='auto'; // mark as auto
+  } else {
+    state.selectedType='';
+  }
+  updateToAccountButtons();
+}
+
+function updateToAccountButtons(){
+  const from=state.selectedAccount;
+  ['UNION BANK','SBI','CASH'].forEach(a=>{
+    const ids={'UNION BANK':'to-acc-union','SBI':'to-acc-sbi','CASH':'to-acc-cash'};
+    const btn=document.getElementById(ids[a]);
+    if(!btn) return;
+    btn.style.opacity=a===from?'0.3':'1';
+    btn.style.pointerEvents=a===from?'none':'auto';
+    if(a===from){btn.classList.remove('active','union-sel','sbi-sel','cash-sel');}
+  });
+}
+
+function selectToAccount(acc){
+  state.selectedToAccount=acc;
+  const cls={'UNION BANK':'union-sel','SBI':'sbi-sel','CASH':'cash-sel'};
+  const ids={'UNION BANK':'to-acc-union','SBI':'to-acc-sbi','CASH':'to-acc-cash'};
+  ['UNION BANK','SBI','CASH'].forEach(a=>{
+    const btn=document.getElementById(ids[a]);
+    if(btn) btn.classList.remove('active','union-sel','sbi-sel','cash-sel');
+  });
+  const btn=document.getElementById(ids[acc]);
+  if(btn) btn.classList.add('active',cls[acc]);
+}
+
 function selectAccount(acc){
   state.selectedAccount=acc;
-  const map={'UNION BANK':'union','SBI':'sbi','CASH':'cash'};
   const cls={'UNION BANK':'union-sel','SBI':'sbi-sel','CASH':'cash-sel'};
   const ids={'UNION BANK':'acc-union','SBI':'acc-sbi','CASH':'acc-cash'};
   ['UNION BANK','SBI','CASH'].forEach(a=>{
     const btn=document.getElementById(ids[a]);
     btn.classList.remove('active','union-sel','sbi-sel','cash-sel');
   });
-  const btn=document.getElementById(ids[acc]);
-  btn.classList.add('active',cls[acc]);
+  document.getElementById(ids[acc]).classList.add('active',cls[acc]);
+  if(state.isSelfTransfer){
+    // Clear to-account if same as from
+    if(state.selectedToAccount===acc){state.selectedToAccount='';}
+    updateToAccountButtons();
+  }
 }
 function selectType(type){
   state.selectedType=type;
@@ -1579,19 +1757,26 @@ async function saveTransaction(){
   if(!state.isOnline){showToast('You are offline','error');return;}
   const date=isoToDDMMYYYY(document.getElementById('txn-date').value);
   const desc=document.getElementById('txn-desc').value.trim();
-  const cat=document.getElementById('txn-category').value;
+  const cat=document.getElementById('txn-category').value||'Transfer';
   const amt=parseFloat(document.getElementById('txn-amount').value);
-  const pay=document.getElementById('txn-payment').value;
+  const pay=document.getElementById('txn-payment').value||'Bank Transfer';
   const acc=state.selectedAccount;
   const type=state.selectedType;
+  const isST=state.isSelfTransfer;
+  const toAcc=state.selectedToAccount;
 
   if(!date){showToast('Please select a date','error');return;}
   if(!desc){showToast('Please enter a description','error');return;}
-  if(!acc){showToast('Please select an account','error');return;}
-  if(!type){showToast('Please select Income or Expense','error');return;}
-  if(!cat){showToast('Please select a category','error');return;}
+  if(!acc){showToast('Please select an account (From)','error');return;}
+  if(isST){
+    if(!toAcc){showToast('Please select To Account','error');return;}
+    if(toAcc===acc){showToast('From and To accounts must be different','error');return;}
+  } else {
+    if(!type||type==='auto'){showToast('Please select Income or Expense','error');return;}
+    if(!cat){showToast('Please select a category','error');return;}
+    if(!pay){showToast('Please select payment mode','error');return;}
+  }
   if(!amt||amt<=0){showToast('Please enter a valid amount','error');return;}
-  if(!pay){showToast('Please select payment mode','error');return;}
 
   const btn=document.getElementById('save-btn');
   const origText=btn.textContent;
@@ -1610,14 +1795,34 @@ async function saveTransaction(){
       showToast('Transaction Updated! ✓','success');
     } else {
       // INSERT
-      const id=generateId(state.transactions);
       const createdAt=new Date().toISOString();
-      const row=[id,date,desc,acc,cat,type,amt,pay,createdAt];
-      await sheetsAPPEND(row);
-      const newTxn={id,date,description:desc,account:acc,category:cat,type,amount:amt,paymentMode:pay,createdAt,_rowIndex:state.transactions.length+5};
-      state.transactions.push(newTxn);
-      localStorage.setItem('mmt_cache',JSON.stringify(state.transactions));
-      showToast('Transaction Saved! ✓','success');
+      if(isST){
+        // Self-transfer: insert TWO records
+        const stCat='Transfer';
+        const stPay=pay||'Bank Transfer';
+        const idExp=generateId(state.transactions);
+        const rowExp=[idExp,date,desc,acc,stCat,'Expense',amt,stPay,createdAt,1];
+        await sheetsAPPEND(rowExp);
+        const txnExp={id:idExp,date,description:desc,account:acc,category:stCat,type:'Expense',amount:amt,paymentMode:stPay,createdAt,selfTransfer:1,_rowIndex:state.transactions.length+5};
+        state.transactions.push(txnExp);
+
+        const idInc=generateId(state.transactions);
+        const rowInc=[idInc,date,desc,toAcc,stCat,'Income',amt,stPay,createdAt,1];
+        await sheetsAPPEND(rowInc);
+        const txnInc={id:idInc,date,description:desc,account:toAcc,category:stCat,type:'Income',amount:amt,paymentMode:stPay,createdAt,selfTransfer:1,_rowIndex:state.transactions.length+5};
+        state.transactions.push(txnInc);
+
+        localStorage.setItem('mmt_cache',JSON.stringify(state.transactions));
+        showToast('Self Transfer Saved! ✓ (2 records)','success');
+      } else {
+        const id=generateId(state.transactions);
+        const row=[id,date,desc,acc,cat,type,amt,pay,createdAt,0];
+        await sheetsAPPEND(row);
+        const newTxn={id,date,description:desc,account:acc,category:cat,type,amount:amt,paymentMode:pay,createdAt,selfTransfer:0,_rowIndex:state.transactions.length+5};
+        state.transactions.push(newTxn);
+        localStorage.setItem('mmt_cache',JSON.stringify(state.transactions));
+        showToast('Transaction Saved! ✓','success');
+      }
     }
     renderDashboard();
     renderHistory();
@@ -1715,7 +1920,8 @@ function toggleFilterPanel(){
 
 function applyReportFilter(){
   const periodVal=[...document.querySelectorAll('input[name=period]')].find(r=>r.checked)?.value||'month';
-  let txns=state.transactions;
+  const inclSelf=document.getElementById('report-self-transfer').checked;
+  let txns=inclSelf?state.transactions:state.transactions.filter(t=>t.selfTransfer!==1);
 
   // Period filter
   if(periodVal==='date'){
@@ -1753,15 +1959,46 @@ function applyReportFilter(){
   renderReport(txns);
 }
 
+/* Build category bar rows helper */
+function catBarsHtml(entries,maxVal,colorClass){
+  if(!entries.length) return '<div style="color:var(--text-secondary);font-size:12px;padding:6px 0;">No data</div>';
+  return entries.map(([cat,amt])=>`
+    <div class="cat-row">
+      <div class="cat-row-top">
+        <span class="cat-name">${escHtml(cat)}</span>
+        <span class="cat-amount ${colorClass}">${formatINR(amt)}</span>
+      </div>
+      <div class="cat-bar-bg"><div class="cat-bar-fill ${colorClass}" style="width:${maxVal>0?Math.round(amt/maxVal*100):0}%"></div></div>
+    </div>`).join('');
+}
+
+/* Store last report data for PDF export */
+let lastReportData=null;
+
 function renderReport(txns){
   const res=document.getElementById('report-results');
   if(txns.length===0){
     res.innerHTML=`<div class="empty-state"><div class="empty-state-icon">📊</div><div class="empty-state-title">No data for selected filters</div></div>`;
     return;
   }
+
   const inc=txns.filter(t=>t.type==='Income').reduce((s,t)=>s+t.amount,0);
   const exp=txns.filter(t=>t.type==='Expense').reduce((s,t)=>s+t.amount,0);
   const net=inc-exp;
+
+  // Opening balance = all initial balances + all txns before earliest date in filter
+  const sortedDates=txns.map(t=>ddmmyyyyToISO(t.date)).filter(Boolean).sort();
+  const firstDate=sortedDates[0]||'';
+  let openBal=0;
+  if(state.initialBalances){
+    state.initialBalances.forEach(t=>{ openBal+=t.type==='Income'?t.amount:-t.amount; });
+  }
+  state.transactions.forEach(t=>{
+    if(t.selfTransfer===1) return;
+    const iso=ddmmyyyyToISO(t.date);
+    if(iso<firstDate){ openBal+=t.type==='Income'?t.amount:-t.amount; }
+  });
+  const closeBal=openBal+net;
 
   // Account breakdown
   const accMap={};
@@ -1771,18 +2008,42 @@ function renderReport(txns){
     accMap[a]={i:ai,e:ae,n:ai-ae};
   });
 
-  // Category breakdown
-  const catMap={};
+  // Category breakdown — split by type
+  const incCatMap={}, expCatMap={}, netCatMap={};
   txns.forEach(t=>{
-    if(!catMap[t.category]) catMap[t.category]=0;
-    catMap[t.category]+=t.amount;
+    const k=t.category||'Others';
+    if(t.type==='Income'){ incCatMap[k]=(incCatMap[k]||0)+t.amount; }
+    else { expCatMap[k]=(expCatMap[k]||0)+t.amount; }
   });
-  const cats=Object.entries(catMap).sort((a,b)=>b[1]-a[1]);
-  const maxCat=cats[0]?cats[0][1]:1;
+  // Net per category = income - expense
+  const allCats=[...new Set([...Object.keys(incCatMap),...Object.keys(expCatMap)])];
+  allCats.forEach(k=>{ netCatMap[k]=(incCatMap[k]||0)-(expCatMap[k]||0); });
+
+  const incCats=Object.entries(incCatMap).sort((a,b)=>b[1]-a[1]);
+  const expCats=Object.entries(expCatMap).sort((a,b)=>b[1]-a[1]);
+  const netCats=Object.entries(netCatMap).sort((a,b)=>b[1]-a[1]);
+  const maxInc=incCats[0]?incCats[0][1]:1;
+  const maxExp=expCats[0]?expCats[0][1]:1;
+  const maxNet=Math.max(...Object.values(netCatMap).map(Math.abs),1);
 
   const txnList=[...txns].reverse();
 
+  // Store for PDF
+  lastReportData={txns,inc,exp,net,openBal,closeBal,accMap,incCats,expCats,netCats};
+
   res.innerHTML=`
+    <!-- Opening / Closing -->
+    <div class="report-summary-grid">
+      <div class="report-summary-card ob-card">
+        <div class="rsc-label">Opening Balance</div>
+        <div class="rsc-value ob">${formatINR(openBal)}</div>
+      </div>
+      <div class="report-summary-card cb-card">
+        <div class="rsc-label">Closing Balance</div>
+        <div class="rsc-value cb">${formatINR(closeBal)}</div>
+      </div>
+    </div>
+    <!-- Summary -->
     <div class="report-summary-grid">
       <div class="report-summary-card income-card">
         <div class="rsc-label">Total Income</div>
@@ -1801,6 +2062,8 @@ function renderReport(txns){
         <div class="rsc-value count">${txns.length}</div>
       </div>
     </div>
+
+    <!-- Account Breakdown -->
     <div class="card">
       <div class="section-title" style="margin-top:0;">Account Breakdown</div>
       <table class="report-table">
@@ -1814,33 +2077,120 @@ function renderReport(txns){
           </tr>`).join('')}
       </table>
     </div>
-    ${cats.length?`
+
+    <!-- Category Breakdown — 3 sections -->
     <div class="card">
       <div class="section-title" style="margin-top:0;">Category Breakdown</div>
-      ${cats.map(([cat,amt])=>`
+      <div class="cat-section-title income-hdr">▲ Income by Category</div>
+      ${catBarsHtml(incCats,maxInc,'inc')}
+      <div class="cat-section-title expense-hdr" style="margin-top:12px;">▼ Expense by Category</div>
+      ${catBarsHtml(expCats,maxExp,'exp')}
+      <div class="cat-section-title net-hdr" style="margin-top:12px;">⇆ Net by Category</div>
+      ${netCats.map(([cat,amt])=>`
         <div class="cat-row">
           <div class="cat-row-top">
             <span class="cat-name">${escHtml(cat)}</span>
-            <span class="cat-amount">${formatINR(amt)}</span>
+            <span class="cat-amount net">${formatINR(amt)}</span>
           </div>
-          <div class="cat-bar-bg"><div class="cat-bar-fill" style="width:${Math.round(amt/maxCat*100)}%"></div></div>
-        </div>
-      `).join('')}
-    </div>`:''}
+          <div class="cat-bar-bg"><div class="cat-bar-fill net" style="width:${maxNet>0?Math.round(Math.abs(amt)/maxNet*100):0}%"></div></div>
+        </div>`).join('')}
+    </div>
+
+    <!-- Transactions list -->
     <div class="section-title">Transactions (${txnList.length})</div>
     ${txnList.map(t=>`
       <div class="txn-item">
         <span class="account-badge ${accountClass(t.account)}">${t.account==='UNION BANK'?'UB':t.account}</span>
         <div class="txn-info">
-          <div class="txn-desc">${escHtml(t.description)}</div>
+          <div class="txn-desc">${escHtml(t.description)}${t.selfTransfer===1?'<span class="transfer-badge">TRANSFER</span>':''}</div>
           <div class="txn-meta">${fmtDisplayDate(t.date)} · ${escHtml(t.category)} · ${escHtml(t.paymentMode)}</div>
         </div>
         <div class="txn-amount ${t.type==='Income'?'income':'expense'}">${t.type==='Income'?'+':'-'}${formatINR(t.amount)}</div>
-      </div>
-    `).join('')}
+      </div>`).join('')}
+
+    <!-- PDF Export -->
+    <button class="btn-pdf" onclick="downloadReportPDF()">📄 Download PDF Report</button>
+    <div style="height:20px;"></div>
   `;
-  // Scroll to results
   document.getElementById('page-reports').scrollTo({top:document.getElementById('report-results').offsetTop-80,behavior:'smooth'});
+}
+
+/* ─── PDF Export ─────────────────────────────────────────── */
+function downloadReportPDF(){
+  if(!lastReportData){showToast('Apply filter first','error');return;}
+  const d=lastReportData;
+  const now=new Date().toLocaleDateString('en-IN');
+
+  const rows=(arr)=>arr.map(([k,v])=>`
+    <tr><td>${escHtml(k)}</td><td style="text-align:right;">${formatINR(v)}</td></tr>`).join('');
+
+  const html=`<!DOCTYPE html><html><head><meta charset="UTF-8">
+  <title>Money Tracker Report</title>
+  <style>
+    body{font-family:Arial,sans-serif;font-size:13px;color:#212121;margin:24px;}
+    h1{font-size:20px;color:#4A148C;margin-bottom:4px;}
+    h2{font-size:14px;color:#6200EE;margin:18px 0 6px;border-bottom:2px solid #EDE7F6;padding-bottom:4px;}
+    table{width:100%;border-collapse:collapse;margin-bottom:12px;}
+    th{background:#EDE7F6;padding:7px 10px;text-align:left;font-size:12px;}
+    td{padding:7px 10px;border-bottom:1px solid #EEE;}
+    .grid{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;margin-bottom:14px;}
+    .box{border-radius:8px;padding:12px;text-align:center;}
+    .box.ob{background:#FFF8E1;} .box.cb{background:#F3E5F5;}
+    .box.inc{background:#E8F5E9;} .box.exp{background:#FFEBEE;}
+    .box.net{background:#E3F2FD;} .box.cnt{background:#EDE7F6;}
+    .box-label{font-size:10px;color:#757575;font-weight:600;text-transform:uppercase;}
+    .box-val{font-size:16px;font-weight:700;margin-top:4px;}
+    .footer{margin-top:24px;font-size:11px;color:#999;border-top:1px solid #EEE;padding-top:8px;}
+  </style></head><body>
+  <h1>💰 My Money Tracker — Report</h1>
+  <p style="color:#757575;margin-bottom:14px;">Generated: ${now}</p>
+
+  <div class="grid">
+    <div class="box ob"><div class="box-label">Opening Balance</div><div class="box-val" style="color:#F9A825;">${formatINR(d.openBal)}</div></div>
+    <div class="box cb"><div class="box-label">Closing Balance</div><div class="box-val" style="color:#7B1FA2;">${formatINR(d.closeBal)}</div></div>
+    <div class="box inc"><div class="box-label">Total Income</div><div class="box-val" style="color:#2E7D32;">${formatINR(d.inc)}</div></div>
+    <div class="box exp"><div class="box-label">Total Expense</div><div class="box-val" style="color:#C62828;">${formatINR(d.exp)}</div></div>
+    <div class="box net"><div class="box-label">Net Balance</div><div class="box-val" style="color:#1565C0;">${formatINR(d.net)}</div></div>
+    <div class="box cnt"><div class="box-label">Transactions</div><div class="box-val" style="color:#6200EE;">${d.txns.length}</div></div>
+  </div>
+
+  <h2>Account Breakdown</h2>
+  <table><tr><th>Account</th><th>Income</th><th>Expense</th><th>Net</th></tr>
+  ${['UNION BANK','SBI','CASH'].map(a=>`<tr>
+    <td><strong>${a}</strong></td>
+    <td style="color:#2E7D32;">${formatINR(d.accMap[a].i)}</td>
+    <td style="color:#C62828;">${formatINR(d.accMap[a].e)}</td>
+    <td style="color:${d.accMap[a].n>=0?'#1565C0':'#C62828'};">${formatINR(d.accMap[a].n)}</td>
+  </tr>`).join('')}</table>
+
+  <h2>Income by Category</h2>
+  <table><tr><th>Category</th><th style="text-align:right;">Amount</th></tr>${rows(d.incCats)}</table>
+
+  <h2>Expense by Category</h2>
+  <table><tr><th>Category</th><th style="text-align:right;">Amount</th></tr>${rows(d.expCats)}</table>
+
+  <h2>Net by Category</h2>
+  <table><tr><th>Category</th><th style="text-align:right;">Net</th></tr>${rows(d.netCats)}</table>
+
+  <h2>All Transactions (${d.txns.length})</h2>
+  <table><tr><th>Date</th><th>Description</th><th>Account</th><th>Category</th><th>Type</th><th style="text-align:right;">Amount</th></tr>
+  ${[...d.txns].reverse().map(t=>`<tr>
+    <td>${escHtml(t.date)}</td><td>${escHtml(t.description)}${t.selfTransfer===1?' [Transfer]':''}</td>
+    <td>${escHtml(t.account)}</td><td>${escHtml(t.category)}</td>
+    <td style="color:${t.type==='Income'?'#2E7D32':'#C62828'};">${t.type}</td>
+    <td style="text-align:right;color:${t.type==='Income'?'#2E7D32':'#C62828'};">${t.type==='Income'?'+':'-'}${formatINR(t.amount)}</td>
+  </tr>`).join('')}</table>
+
+  <div class="footer">My Money Tracker · Report generated on ${now}</div>
+  </body></html>`;
+
+  const blob=new Blob([html],{type:'text/html'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url; a.download=`MoneyTracker_Report_${now.replace(/\//g,'-')}.html`;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a); URL.revokeObjectURL(url);
+  showToast('PDF Report downloaded! ✓','success');
 }
 
 /* ============================================================
