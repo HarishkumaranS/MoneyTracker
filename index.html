@@ -384,11 +384,37 @@ select.form-input option{background:var(--card);color:var(--text);}
 .btn-pdf{width:100%;height:48px;border-radius:10px;background:rgba(244,67,54,0.12);border:1.5px solid rgba(244,67,54,0.4);color:#F44336;font-size:14px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;margin-top:10px;}
 .btn-pdf:active{opacity:0.75;}
 
-/* Opening/Closing balance cards */
-.report-summary-card.ob-card{background:rgba(255,193,7,0.1);border:1px solid rgba(255,193,7,0.3);}
-.report-summary-card.cb-card{background:rgba(156,39,176,0.1);border:1px solid rgba(156,39,176,0.3);}
+/* Opening/Closing balance cards — clickable */
+.report-summary-card.ob-card{background:rgba(255,193,7,0.1);border:1px solid rgba(255,193,7,0.3);cursor:pointer;}
+.report-summary-card.cb-card{background:rgba(156,39,176,0.1);border:1px solid rgba(156,39,176,0.3);cursor:pointer;}
+.report-summary-card.ob-card:active,.report-summary-card.cb-card:active{opacity:0.75;}
 .rsc-value.ob{color:#FFC107;}
 .rsc-value.cb{color:#9C27B0;}
+.rsc-hint{font-size:9px;color:var(--text-secondary);opacity:0.6;margin-top:2px;}
+
+/* Clickable dashboard balance cards */
+.summary-card.bal-clickable{cursor:pointer;}
+.summary-card.bal-clickable:active{opacity:0.75;}
+.bal-hint{font-size:9px;color:var(--text-secondary);opacity:0.6;display:block;margin-top:3px;}
+
+/* Balance breakdown popup */
+.bal-popup-overlay{position:fixed;inset:0;background:var(--overlay);z-index:9999;display:none;align-items:center;justify-content:center;padding:24px;}
+.bal-popup-overlay.show{display:flex;}
+.bal-popup-card{background:var(--card);border:1px solid var(--card-border);border-radius:16px;padding:24px;width:100%;max-width:340px;}
+.bal-popup-title{font-size:17px;font-weight:700;margin-bottom:3px;}
+.bal-popup-subtitle{font-size:12px;color:var(--text-secondary);margin-bottom:18px;}
+.bal-acc-row{display:flex;align-items:center;justify-content:space-between;padding:11px 0;border-bottom:1px solid var(--card-border);}
+.bal-acc-row:last-child{border-bottom:none;}
+.bal-acc-left{display:flex;align-items:center;gap:9px;font-size:14px;font-weight:600;}
+.bal-acc-amt{font-size:15px;font-weight:700;}
+.bal-total-row{display:flex;align-items:center;justify-content:space-between;padding-top:12px;margin-top:8px;border-top:2px solid var(--card-border);}
+.bal-total-label{font-size:13px;font-weight:700;color:var(--text-secondary);}
+.bal-total-val{font-size:17px;font-weight:800;color:var(--accent);}
+.bal-popup-close{width:100%;height:44px;border-radius:10px;background:var(--input-bg);border:1px solid var(--input-border);color:var(--text);font-size:14px;font-weight:600;cursor:pointer;margin-top:18px;}
+.bal-popup-close:active{opacity:0.7;}
+
+/* Type row — can be hidden when self-transfer active */
+#type-row-group{display:block;}
 
 /* Category breakdown sub-sections */
 .cat-section-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;padding:8px 0 6px;margin-top:4px;}
@@ -418,6 +444,20 @@ select.form-input option{background:var(--card);color:var(--text);}
       <button class="modal-cancel" onclick="closeModal()">Cancel</button>
       <button class="modal-confirm" id="modal-confirm-btn">Delete</button>
     </div>
+  </div>
+</div>
+
+<!-- BALANCE BREAKDOWN POPUP -->
+<div class="bal-popup-overlay" id="bal-popup">
+  <div class="bal-popup-card">
+    <div class="bal-popup-title" id="bal-popup-title">Balance Breakdown</div>
+    <div class="bal-popup-subtitle" id="bal-popup-subtitle">Account-wise breakdown</div>
+    <div id="bal-popup-rows"></div>
+    <div class="bal-total-row">
+      <span class="bal-total-label">Total</span>
+      <span class="bal-total-val" id="bal-popup-total"></span>
+    </div>
+    <button class="bal-popup-close" onclick="closeBalPopup()">Close</button>
   </div>
 </div>
 
@@ -618,7 +658,23 @@ select.form-input option{background:var(--card);color:var(--text);}
           <button class="seg-btn account-seg" id="acc-cash" onclick="selectAccount('CASH')">💵 CASH</button>
         </div>
       </div>
-      <div class="form-group">
+      <!-- Self Transfer Checkbox — immediately after Account -->
+      <div class="card" style="padding:12px 16px;margin-bottom:12px;">
+        <label class="check-row" style="padding:4px 0;">
+          <input type="checkbox" id="self-transfer-chk" onchange="toggleSelfTransferForm()">
+          <label for="self-transfer-chk" style="font-size:14px;font-weight:600;color:var(--text);">🔄 Self Transfer</label>
+        </label>
+        <div id="to-account-group" style="margin-top:10px;">
+          <div class="form-label">To Account</div>
+          <div class="seg-group" id="to-acc-seg">
+            <button class="seg-btn account-seg" id="to-acc-union" onclick="selectToAccount('UNION BANK')">🏦 UNION BANK</button>
+            <button class="seg-btn account-seg" id="to-acc-sbi" onclick="selectToAccount('SBI')">🏛 SBI</button>
+            <button class="seg-btn account-seg" id="to-acc-cash" onclick="selectToAccount('CASH')">💵 CASH</button>
+          </div>
+        </div>
+      </div>
+      <!-- Type row — hidden when Self Transfer is checked -->
+      <div class="form-group" id="type-row-group">
         <label class="form-label">Type</label>
         <div class="seg-group">
           <button class="seg-btn" id="type-income" onclick="selectType('Income')">↑ INCOME</button>
@@ -630,9 +686,9 @@ select.form-input option{background:var(--card);color:var(--text);}
         <select class="form-input" id="txn-category">
           <option value="">Select category...</option>
           <option>Food</option><option>Transport</option><option>Savings</option>
-          <option>Bills</option><option>Education</option><option>Healthcare</option>c:\Users\haris\Downloads\Gemini_Generated_Image_lzav06lzav06lzav.png
+          <option>Bills</option><option>Education</option><option>Healthcare</option>
           <option>Entertainment</option><option>Shopping</option><option>Investment</option>
-          <option>Salary</option><option>Chit</option><option>Others</option>
+          <option>Salary</option><option>Chit</option><option>Transfer</option><option>Others</option>
         </select>
       </div>
       <div class="form-group">
@@ -649,21 +705,6 @@ select.form-input option{background:var(--card);color:var(--text);}
           <option>Cash</option><option>UPI</option>
          <option>Debit Card</option><option>Bank Transfer</option>
         </select>
-      </div>
-      <!-- Self Transfer Checkbox -->
-      <div class="card" style="padding:12px 16px;margin-bottom:12px;">
-        <label class="check-row" style="padding:4px 0;">
-          <input type="checkbox" id="self-transfer-chk" onchange="toggleSelfTransferForm()">
-          <label for="self-transfer-chk" style="font-size:14px;font-weight:600;color:var(--text);">🔄 Self Transfer</label>
-        </label>
-        <div id="to-account-group" style="margin-top:10px;">
-          <div class="form-label">To Account</div>
-          <div class="seg-group" id="to-acc-seg">
-            <button class="seg-btn account-seg" id="to-acc-union" onclick="selectToAccount('UNION BANK')">🏦 UNION BANK</button>
-            <button class="seg-btn account-seg" id="to-acc-sbi" onclick="selectToAccount('SBI')">🏛 SBI</button>
-            <button class="seg-btn account-seg" id="to-acc-cash" onclick="selectToAccount('CASH')">💵 CASH</button>
-          </div>
-        </div>
       </div>
 
       <button class="btn-primary" id="save-btn" onclick="saveTransaction()" style="margin-top:8px;">SAVE TRANSACTION</button>
@@ -1232,7 +1273,7 @@ async function sheetsAPPEND(values) {
   try {
     const token = await ensureOAuth();
 
-    const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}/values/${CONFIG.SHEET_NAME}!A:J:append?valueInputOption=USER_ENTERED`;
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}/values/${CONFIG.SHEET_NAME}!A:K:append?valueInputOption=USER_ENTERED`;
 
     const res = await fetch(url, {
       method: "POST",
@@ -1267,7 +1308,7 @@ async function sheetsUPDATE(rowIndex, values) {
       throw new Error("Row index is missing!");
     }
 
-    const range = `${CONFIG.SHEET_NAME}!A${rowIndex}:J${rowIndex}`;
+    const range = `${CONFIG.SHEET_NAME}!A${rowIndex}:K${rowIndex}`;
 
     console.log("Updating range:", range);
     console.log("Values:", values);
@@ -1340,27 +1381,6 @@ async function sheetsDELETE(sheetId, rowIndex) {
 
   console.log("✅ DELETE SUCCESS");
 }
-async function deleteTransaction(id) {
-  const txn = state.transactions.find(t => t.id === id);
-  if (!txn) return;
-
-  try {
-    const gid = await getSheetGid();
-
-    await sheetsDELETE(gid, txn._rowIndex);
-
-    // mark delete to avoid cache override
-    state.justDeleted = true;
-
-    await loadTransactions();
-
-    showToast('Transaction Deleted!', 'success');
-
-  } catch (e) {
-    console.error(e);
-    showToast('Delete failed: ' + e.message, 'error');
-  }
-}
 async function getSheetGid(){
   const url=`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}?key=${CONFIG.API_KEY}`;
   const r=await fetch(url);
@@ -1380,7 +1400,8 @@ function rowToTxn(row,index){
     amount:parseFloat(row[6])||0,
     paymentMode:row[7]||'',
     createdAt:row[8]||'',
-    selfTransfer:parseInt(row[9])||0,  // column J: 1 = self transfer pair
+    selfTransfer:parseInt(row[9])||0,   // column J: 1 = self transfer pair
+    transferGroupId:row[10]||'',        // column K: shared ID linking both transfer records
     _rowIndex:index+2
   };
 }
@@ -1390,11 +1411,11 @@ if(localStorage.getItem("mmt_logged_in")){
 async function loadTransactions(){
   try{
     // Load initial balances (rows 2-4)
-    const initData = await sheetsGET(CONFIG.SHEET_NAME + '!A2:I4');
+    const initData = await sheetsGET(CONFIG.SHEET_NAME + '!A2:K4');
     const initRows = initData.values || [];
     
     // Load all transactions (from row 5 onwards)
-    const data = await sheetsGET(CONFIG.SHEET_NAME + '!A5:I');
+    const data = await sheetsGET(CONFIG.SHEET_NAME + '!A5:K');
     const rows = data.values || [];
 
     // Store initial balances separately
@@ -1438,10 +1459,11 @@ function generateId(txns){
 /* ============================================================
    DASHBOARD RENDER
    ============================================================ */
-function calcBalances(){
+function calcBalances(includeSelf){
+  if(includeSelf===undefined) includeSelf=false;
   const bal={union:0,sbi:0,cash:0};
   
-  // Add initial balances (rows 2-4)
+  // Add initial balances (rows 2-4) — always include
   if (state.initialBalances) {
     state.initialBalances.forEach(t=>{
       const amt=t.type==='Income'?t.amount:-t.amount;
@@ -1451,8 +1473,9 @@ function calcBalances(){
     });
   }
   
-  // Add transactions (from row 5 onwards)
+  // Add transactions — filter self-transfers unless includeSelf=true
   state.transactions.forEach(t=>{
+    if(!includeSelf && t.selfTransfer===1) return;
     const amt=t.type==='Income'?t.amount:-t.amount;
     if(t.account==='UNION BANK') bal.union+=amt;
     else if(t.account==='SBI') bal.sbi+=amt;
@@ -1522,8 +1545,7 @@ function toggleDashSelfTransfer(){
 
 function renderDashboard(){
   const inc=state.dashIncludeSelf;
-  const bal=calcBalances();
-  const total=bal.union+bal.sbi+bal.cash;
+  const bal=calcBalances(inc);
   const mo=calcMonthSummary(inc);
   const openBal=calcOpeningBalance(inc);
   const curBal=calcCurrentBalance(inc);
@@ -1543,11 +1565,8 @@ function renderDashboard(){
       <div class="account-balance ${bal.cash<0?'negative':''}">${formatINR(bal.cash)}</div>
     </div>
   `;
+  /* This Month — NO Total Balance card */
   document.getElementById('summary-cards').innerHTML=`
-    <div class="summary-card">
-      <div class="summary-label">Total Balance</div>
-      <div class="summary-value ${total<0?'expense':''}">${formatINR(total)}</div>
-    </div>
     <div class="summary-card">
       <div class="summary-label">Income</div>
       <div class="summary-value income">${formatINR(mo.income)}</div>
@@ -1556,19 +1575,22 @@ function renderDashboard(){
       <div class="summary-label">Expense</div>
       <div class="summary-value expense">${formatINR(mo.expense)}</div>
     </div>
-    <div class="summary-card">
+    <div class="summary-card" style="grid-column:span 2;">
       <div class="summary-label">Net Savings</div>
       <div class="summary-value ${mo.net<0?'expense':'income'}">${formatINR(mo.net)}</div>
     </div>
   `;
+  /* Opening / Current Balance — clickable → account breakdown popup */
   document.getElementById('balance-cards').innerHTML=`
-    <div class="summary-card">
+    <div class="summary-card bal-clickable" onclick="showBalPopup('opening',${inc})">
       <div class="summary-label">Opening Balance</div>
       <div class="summary-value" style="color:#FFC107;">${formatINR(openBal)}</div>
+      <span class="bal-hint">Tap for breakdown ▸</span>
     </div>
-    <div class="summary-card">
+    <div class="summary-card bal-clickable" onclick="showBalPopup('current',${inc})">
       <div class="summary-label">Current Balance</div>
       <div class="summary-value" style="color:var(--accent);">${formatINR(curBal)}</div>
+      <span class="bal-hint">Tap for breakdown ▸</span>
     </div>
   `;
 
@@ -1586,7 +1608,7 @@ function renderDashboard(){
     <div class="txn-item">
       <span class="account-badge ${accountClass(t.account)}">${t.account==='UNION BANK'?'UB':t.account}</span>
       <div class="txn-info">
-        <div class="txn-desc">${escHtml(t.description)}</div>
+        <div class="txn-desc">${escHtml(t.description)}${t.selfTransfer===1?'<span class="transfer-badge">TRANSFER</span>':''}</div>
         <div class="txn-meta">${fmtDisplayDate(t.date)} · ${escHtml(t.category)}</div>
       </div>
       <div class="txn-amount ${t.type==='Income'?'income':'expense'}">${t.type==='Income'?'+':'-'}${formatINR(t.amount)}</div>
@@ -1661,6 +1683,7 @@ function setAddDefaults(){
   const stChk=document.getElementById('self-transfer-chk');
   if(stChk){stChk.checked=false;}
   document.getElementById('to-account-group').style.display='none';
+  document.getElementById('type-row-group').style.display='block';
   ['to-acc-union','to-acc-sbi','to-acc-cash'].forEach(id=>{
     const b=document.getElementById(id);
     if(b) b.classList.remove('active','union-sel','sbi-sel','cash-sel');
@@ -1675,7 +1698,8 @@ function setAddDefaults(){
 function toggleSelfTransferForm(){
   state.isSelfTransfer=document.getElementById('self-transfer-chk').checked;
   document.getElementById('to-account-group').style.display=state.isSelfTransfer?'block':'none';
-  // Reset type buttons when self-transfer checked (they become auto-set)
+  // Hide Type row when self-transfer is active (type is auto-set per record)
+  document.getElementById('type-row-group').style.display=state.isSelfTransfer?'none':'block';
   if(state.isSelfTransfer){
     ['type-income','type-expense'].forEach(id=>{
       document.getElementById(id).classList.remove('active','income-sel','expense-sel');
@@ -1741,14 +1765,26 @@ function editTransaction(id){
   if(!t) return;
   switchTab('add');
   state.editId=id;
+  state.isSelfTransfer=false;
   document.getElementById('add-page-title').textContent='Edit Transaction';
   document.getElementById('save-btn').textContent='UPDATE TRANSACTION';
-  document.getElementById('edit-mode-banner').classList.add('show');
+  const banner=document.getElementById('edit-mode-banner');
+  banner.classList.add('show');
+  if(t.selfTransfer===1&&t.transferGroupId){
+    banner.textContent='✏️ Self Transfer — updating will apply to BOTH linked records';
+  } else {
+    banner.textContent='✏️ Editing Transaction — Make your changes and update';
+  }
   document.getElementById('txn-date').value=ddmmyyyyToISO(t.date);
   document.getElementById('txn-desc').value=t.description;
   document.getElementById('txn-category').value=t.category;
   document.getElementById('txn-amount').value=t.amount;
   document.getElementById('txn-payment').value=t.paymentMode;
+  // Always show type row in edit mode; hide self-transfer controls
+  document.getElementById('type-row-group').style.display='block';
+  document.getElementById('to-account-group').style.display='none';
+  const stChk=document.getElementById('self-transfer-chk');
+  if(stChk) stChk.checked=false;
   selectAccount(t.account);
   selectType(t.type);
 }
@@ -1757,9 +1793,9 @@ async function saveTransaction(){
   if(!state.isOnline){showToast('You are offline','error');return;}
   const date=isoToDDMMYYYY(document.getElementById('txn-date').value);
   const desc=document.getElementById('txn-desc').value.trim();
-  const cat=document.getElementById('txn-category').value||'Transfer';
+  const cat=document.getElementById('txn-category').value; // no forced default
   const amt=parseFloat(document.getElementById('txn-amount').value);
-  const pay=document.getElementById('txn-payment').value||'Bank Transfer';
+  const pay=document.getElementById('txn-payment').value;
   const acc=state.selectedAccount;
   const type=state.selectedType;
   const isST=state.isSelfTransfer;
@@ -1788,37 +1824,61 @@ async function saveTransaction(){
       // UPDATE
       const t=state.transactions.find(x=>x.id===state.editId);
       if(!t) throw new Error('Transaction not found');
-      const row=[t.id,date,desc,acc,cat,type,amt,pay,t.createdAt];
-      await sheetsUPDATE(t._rowIndex,row);
-      Object.assign(t,{date,description:desc,account:acc,category:cat,type,amount:amt,paymentMode:pay});
+
+      if(t.selfTransfer===1 && t.transferGroupId){
+        // Self-transfer pair — update BOTH records
+        const partner=state.transactions.find(x=>x.transferGroupId===t.transferGroupId && x.id!==t.id);
+        const updCat=cat||t.category;
+        const updPay=pay||t.paymentMode;
+        // Update this record
+        const row1=[t.id,date,desc,t.account,updCat,t.type,amt,updPay,t.createdAt,1,t.transferGroupId];
+        await sheetsUPDATE(t._rowIndex,row1);
+        Object.assign(t,{date,description:desc,category:updCat,amount:amt,paymentMode:updPay});
+        // Update partner record
+        if(partner){
+          const row2=[partner.id,date,desc,partner.account,updCat,partner.type,amt,updPay,partner.createdAt,1,partner.transferGroupId];
+          await sheetsUPDATE(partner._rowIndex,row2);
+          Object.assign(partner,{date,description:desc,category:updCat,amount:amt,paymentMode:updPay});
+        }
+        showToast('Self Transfer Updated! ✓ (both records)','success');
+      } else {
+        // Normal single record update — 11 columns
+        const row=[t.id,date,desc,acc,cat,type,amt,pay,t.createdAt,0,''];
+        await sheetsUPDATE(t._rowIndex,row);
+        Object.assign(t,{date,description:desc,account:acc,category:cat,type,amount:amt,paymentMode:pay});
+        showToast('Transaction Updated! ✓','success');
+      }
       localStorage.setItem('mmt_cache',JSON.stringify(state.transactions));
-      showToast('Transaction Updated! ✓','success');
     } else {
       // INSERT
       const createdAt=new Date().toISOString();
       if(isST){
-        // Self-transfer: insert TWO records
-        const stCat='Transfer';
+        // Self-transfer: TWO records with shared TransferGroupId
+        const tgId='TG'+Date.now();
+        const stCat=cat||''; // user's choice, no forced default
         const stPay=pay||'Bank Transfer';
         const idExp=generateId(state.transactions);
-        const rowExp=[idExp,date,desc,acc,stCat,'Expense',amt,stPay,createdAt,1];
+        // Record 1: Expense from From Account
+        const rowExp=[idExp,date,desc,acc,stCat,'Expense',amt,stPay,createdAt,1,tgId];
         await sheetsAPPEND(rowExp);
-        const txnExp={id:idExp,date,description:desc,account:acc,category:stCat,type:'Expense',amount:amt,paymentMode:stPay,createdAt,selfTransfer:1,_rowIndex:state.transactions.length+5};
+        const txnExp={id:idExp,date,description:desc,account:acc,category:stCat,type:'Expense',amount:amt,paymentMode:stPay,createdAt,selfTransfer:1,transferGroupId:tgId,_rowIndex:state.transactions.length+5};
         state.transactions.push(txnExp);
 
         const idInc=generateId(state.transactions);
-        const rowInc=[idInc,date,desc,toAcc,stCat,'Income',amt,stPay,createdAt,1];
+        // Record 2: Income to To Account
+        const rowInc=[idInc,date,desc,toAcc,stCat,'Income',amt,stPay,createdAt,1,tgId];
         await sheetsAPPEND(rowInc);
-        const txnInc={id:idInc,date,description:desc,account:toAcc,category:stCat,type:'Income',amount:amt,paymentMode:stPay,createdAt,selfTransfer:1,_rowIndex:state.transactions.length+5};
+        const txnInc={id:idInc,date,description:desc,account:toAcc,category:stCat,type:'Income',amount:amt,paymentMode:stPay,createdAt,selfTransfer:1,transferGroupId:tgId,_rowIndex:state.transactions.length+5};
         state.transactions.push(txnInc);
 
         localStorage.setItem('mmt_cache',JSON.stringify(state.transactions));
         showToast('Self Transfer Saved! ✓ (2 records)','success');
       } else {
         const id=generateId(state.transactions);
-        const row=[id,date,desc,acc,cat,type,amt,pay,createdAt,0];
+        // Normal record — 11 columns (transferGroupId='')
+        const row=[id,date,desc,acc,cat,type,amt,pay,createdAt,0,''];
         await sheetsAPPEND(row);
-        const newTxn={id,date,description:desc,account:acc,category:cat,type,amount:amt,paymentMode:pay,createdAt,selfTransfer:0,_rowIndex:state.transactions.length+5};
+        const newTxn={id,date,description:desc,account:acc,category:cat,type,amount:amt,paymentMode:pay,createdAt,selfTransfer:0,transferGroupId:'',_rowIndex:state.transactions.length+5};
         state.transactions.push(newTxn);
         localStorage.setItem('mmt_cache',JSON.stringify(state.transactions));
         showToast('Transaction Saved! ✓','success');
@@ -1838,12 +1898,21 @@ async function saveTransaction(){
 }
 
 /* ============================================================
-   DELETE
+   DELETE — handles self-transfer pairs
    ============================================================ */
 let pendingDeleteId=null;
 function confirmDelete(id){
   pendingDeleteId=id;
-  document.getElementById('confirm-modal').classList.add('show');
+  const txn=state.transactions.find(t=>t.id===id);
+  const modal=document.getElementById('confirm-modal');
+  modal.classList.add('show');
+  if(txn&&txn.selfTransfer===1&&txn.transferGroupId){
+    document.getElementById('modal-title').textContent='Delete Self Transfer';
+    document.getElementById('modal-msg').textContent='This is a Self Transfer — both linked records will be deleted. This cannot be undone.';
+  } else {
+    document.getElementById('modal-title').textContent='Delete Transaction';
+    document.getElementById('modal-msg').textContent='Are you sure you want to delete this transaction? This cannot be undone.';
+  }
   document.getElementById('modal-confirm-btn').onclick=performDelete;
 }
 function closeModal(){
@@ -1852,16 +1921,30 @@ function closeModal(){
 }
 async function performDelete(){
   if(!pendingDeleteId) return;
-
-  if(!state.isOnline){
-    showToast('You are offline','error');
-    closeModal();
-    return;
-  }
-
-  await deleteTransaction(pendingDeleteId);
-
+  if(!state.isOnline){showToast('You are offline','error');closeModal();return;}
+  const txn=state.transactions.find(t=>t.id===pendingDeleteId);
   closeModal();
+  if(!txn) return;
+  try{
+    const gid=await getSheetGid();
+    if(txn.selfTransfer===1&&txn.transferGroupId){
+      // Find partner record and delete both (higher row first to avoid index shift)
+      const partner=state.transactions.find(x=>x.transferGroupId===txn.transferGroupId&&x.id!==txn.id);
+      const toDelete=[txn,partner].filter(Boolean).sort((a,b)=>b._rowIndex-a._rowIndex);
+      for(const rec of toDelete){
+        await sheetsDELETE(gid,rec._rowIndex);
+      }
+      showToast('Self Transfer Deleted! ✓ (both records)','success');
+    } else {
+      await sheetsDELETE(gid,txn._rowIndex);
+      showToast('Transaction Deleted! ✓','success');
+    }
+    state.justDeleted=true;
+    await loadTransactions();
+  }catch(e){
+    console.error(e);
+    showToast('Delete failed: '+e.message,'error');
+  }
 }
 
 /* ============================================================
@@ -1876,6 +1959,61 @@ function switchTab(tab){
   if(tab==='add' && !state.editId) setAddDefaults();
   if(tab==='add') document.getElementById('txn-date').value=document.getElementById('txn-date').value||todayISO();
   resetAutoLock();
+}
+
+/* ============================================================
+   BALANCE BREAKDOWN POPUP
+   ============================================================ */
+function showBalPopup(type, includeSelf){
+  // type = 'opening' | 'current'
+  // includeSelf: boolean — pass state.dashIncludeSelf when called from dashboard
+  const inc=(includeSelf!==undefined)?!!includeSelf:state.dashIncludeSelf;
+  const bal={union:0,sbi:0,cash:0};
+  const add=(t)=>{
+    const amt=t.type==='Income'?t.amount:-t.amount;
+    if(t.account==='UNION BANK') bal.union+=amt;
+    else if(t.account==='SBI') bal.sbi+=amt;
+    else bal.cash+=amt;
+  };
+  // Initial balances always included
+  if(state.initialBalances) state.initialBalances.forEach(add);
+  if(type==='opening'){
+    const now=new Date();
+    const m=String(now.getMonth()+1).padStart(2,'0');
+    const y=String(now.getFullYear());
+    const firstDayISO=y+'-'+m+'-01';
+    state.transactions.forEach(t=>{
+      if(!inc && t.selfTransfer===1) return;
+      if(ddmmyyyyToISO(t.date)<firstDayISO) add(t);
+    });
+    document.getElementById('bal-popup-title').textContent='Opening Balance';
+    document.getElementById('bal-popup-subtitle').textContent='Account balances at start of this month';
+  } else {
+    state.transactions.forEach(t=>{
+      if(!inc && t.selfTransfer===1) return;
+      add(t);
+    });
+    document.getElementById('bal-popup-title').textContent='Current Balance';
+    document.getElementById('bal-popup-subtitle').textContent='Account balances right now';
+  }
+  const total=bal.union+bal.sbi+bal.cash;
+  document.getElementById('bal-popup-rows').innerHTML=[
+    {name:'UNION BANK',cls:'union',val:bal.union},
+    {name:'SBI',       cls:'sbi',  val:bal.sbi},
+    {name:'CASH',      cls:'cash', val:bal.cash}
+  ].map(a=>`
+    <div class="bal-acc-row">
+      <div class="bal-acc-left">
+        <span class="account-badge ${a.cls}">${a.name==='UNION BANK'?'UB':a.name}</span>
+        ${a.name}
+      </div>
+      <div class="bal-acc-amt" style="color:${a.val<0?'var(--expense)':'var(--income)'};">${formatINR(a.val)}</div>
+    </div>`).join('');
+  document.getElementById('bal-popup-total').textContent=formatINR(total);
+  document.getElementById('bal-popup').classList.add('show');
+}
+function closeBalPopup(){
+  document.getElementById('bal-popup').classList.remove('show');
 }
 
 /* ============================================================
@@ -1921,6 +2059,7 @@ function toggleFilterPanel(){
 function applyReportFilter(){
   const periodVal=[...document.querySelectorAll('input[name=period]')].find(r=>r.checked)?.value||'month';
   const inclSelf=document.getElementById('report-self-transfer').checked;
+  // Default: self-transfers EXCLUDED unless checkbox ticked
   let txns=inclSelf?state.transactions:state.transactions.filter(t=>t.selfTransfer!==1);
 
   // Period filter
@@ -1956,7 +2095,7 @@ function applyReportFilter(){
   // Type filter
   if(state.filterType!=='ALL') txns=txns.filter(t=>t.type===state.filterType);
 
-  renderReport(txns);
+  renderReport(txns, inclSelf);
 }
 
 /* Build category bar rows helper */
@@ -1975,10 +2114,12 @@ function catBarsHtml(entries,maxVal,colorClass){
 /* Store last report data for PDF export */
 let lastReportData=null;
 
-function renderReport(txns){
+function renderReport(txns, inclSelf){
+  inclSelf=!!inclSelf;
   const res=document.getElementById('report-results');
   if(txns.length===0){
     res.innerHTML=`<div class="empty-state"><div class="empty-state-icon">📊</div><div class="empty-state-title">No data for selected filters</div></div>`;
+    lastReportData=null;
     return;
   }
 
@@ -1994,11 +2135,30 @@ function renderReport(txns){
     state.initialBalances.forEach(t=>{ openBal+=t.type==='Income'?t.amount:-t.amount; });
   }
   state.transactions.forEach(t=>{
-    if(t.selfTransfer===1) return;
+    if(!inclSelf && t.selfTransfer===1) return;
     const iso=ddmmyyyyToISO(t.date);
     if(iso<firstDate){ openBal+=t.type==='Income'?t.amount:-t.amount; }
   });
   const closeBal=openBal+net;
+
+  // Compute per-account opening balance for popup
+  const openAccBal={union:0,sbi:0,cash:0};
+  if(state.initialBalances) state.initialBalances.forEach(t=>{
+    const amt=t.type==='Income'?t.amount:-t.amount;
+    if(t.account==='UNION BANK') openAccBal.union+=amt;
+    else if(t.account==='SBI') openAccBal.sbi+=amt;
+    else openAccBal.cash+=amt;
+  });
+  state.transactions.forEach(t=>{
+    if(!inclSelf && t.selfTransfer===1) return;
+    const iso=ddmmyyyyToISO(t.date);
+    if(iso<firstDate){
+      const amt=t.type==='Income'?t.amount:-t.amount;
+      if(t.account==='UNION BANK') openAccBal.union+=amt;
+      else if(t.account==='SBI') openAccBal.sbi+=amt;
+      else openAccBal.cash+=amt;
+    }
+  });
 
   // Account breakdown
   const accMap={};
@@ -2015,7 +2175,6 @@ function renderReport(txns){
     if(t.type==='Income'){ incCatMap[k]=(incCatMap[k]||0)+t.amount; }
     else { expCatMap[k]=(expCatMap[k]||0)+t.amount; }
   });
-  // Net per category = income - expense
   const allCats=[...new Set([...Object.keys(incCatMap),...Object.keys(expCatMap)])];
   allCats.forEach(k=>{ netCatMap[k]=(incCatMap[k]||0)-(expCatMap[k]||0); });
 
@@ -2028,18 +2187,20 @@ function renderReport(txns){
 
   const txnList=[...txns].reverse();
 
-  // Store for PDF
-  lastReportData={txns,inc,exp,net,openBal,closeBal,accMap,incCats,expCats,netCats};
+  // Store for PDF — include openAccBal and inclSelf
+  lastReportData={txns,inc,exp,net,openBal,closeBal,openAccBal,accMap,incCats,expCats,netCats,inclSelf};
 
   res.innerHTML=`
-    <!-- Opening / Closing -->
+    <!-- Opening / Closing — clickable for account breakdown -->
     <div class="report-summary-grid">
-      <div class="report-summary-card ob-card">
+      <div class="report-summary-card ob-card" onclick="showReportBalPopup('opening')">
         <div class="rsc-label">Opening Balance</div>
+        <div class="rsc-hint">Tap for account breakdown ▸</div>
         <div class="rsc-value ob">${formatINR(openBal)}</div>
       </div>
-      <div class="report-summary-card cb-card">
+      <div class="report-summary-card cb-card" onclick="showReportBalPopup('closing')">
         <div class="rsc-label">Closing Balance</div>
+        <div class="rsc-hint">Tap for account breakdown ▸</div>
         <div class="rsc-value cb">${formatINR(closeBal)}</div>
       </div>
     </div>
@@ -2115,6 +2276,43 @@ function renderReport(txns){
   document.getElementById('page-reports').scrollTo({top:document.getElementById('report-results').offsetTop-80,behavior:'smooth'});
 }
 
+/* Show balance popup from report view */
+function showReportBalPopup(type){
+  if(!lastReportData) return;
+  const d=lastReportData;
+  const bal={union:0,sbi:0,cash:0};
+  if(type==='opening'){
+    bal.union=d.openAccBal.union;
+    bal.sbi=d.openAccBal.sbi;
+    bal.cash=d.openAccBal.cash;
+    document.getElementById('bal-popup-title').textContent='Opening Balance';
+    document.getElementById('bal-popup-subtitle').textContent='Account balances at period start';
+  } else {
+    // Closing = opening + period transactions per account
+    ['UNION BANK','SBI','CASH'].forEach(a=>{
+      const key=a==='UNION BANK'?'union':a==='SBI'?'sbi':'cash';
+      bal[key]=d.openAccBal[key]+d.accMap[a].n;
+    });
+    document.getElementById('bal-popup-title').textContent='Closing Balance';
+    document.getElementById('bal-popup-subtitle').textContent='Account balances at period end';
+  }
+  const total=bal.union+bal.sbi+bal.cash;
+  document.getElementById('bal-popup-rows').innerHTML=[
+    {name:'UNION BANK',cls:'union',val:bal.union},
+    {name:'SBI',       cls:'sbi',  val:bal.sbi},
+    {name:'CASH',      cls:'cash', val:bal.cash}
+  ].map(a=>`
+    <div class="bal-acc-row">
+      <div class="bal-acc-left">
+        <span class="account-badge ${a.cls}">${a.name==='UNION BANK'?'UB':a.name}</span>
+        ${a.name}
+      </div>
+      <div class="bal-acc-amt" style="color:${a.val<0?'var(--expense)':'var(--income)'};">${formatINR(a.val)}</div>
+    </div>`).join('');
+  document.getElementById('bal-popup-total').textContent=formatINR(total);
+  document.getElementById('bal-popup').classList.add('show');
+}
+
 /* ─── PDF Export ─────────────────────────────────────────── */
 function downloadReportPDF(){
   if(!lastReportData){showToast('Apply filter first','error');return;}
@@ -2124,22 +2322,39 @@ function downloadReportPDF(){
   const rows=(arr)=>arr.map(([k,v])=>`
     <tr><td>${escHtml(k)}</td><td style="text-align:right;">${formatINR(v)}</td></tr>`).join('');
 
+  // Account-wise closing balance = opening + period net per account
+  const closeAccBal={
+    union: d.openAccBal.union + d.accMap['UNION BANK'].n,
+    sbi:   d.openAccBal.sbi   + d.accMap['SBI'].n,
+    cash:  d.openAccBal.cash  + d.accMap['CASH'].n
+  };
+
+  const accBalRows=(balObj)=>['UNION BANK','SBI','CASH'].map(a=>{
+    const key=a==='UNION BANK'?'union':a==='SBI'?'sbi':'cash';
+    const v=balObj[key];
+    return `<tr><td>${a}</td><td style="text-align:right;color:${v>=0?'#2E7D32':'#C62828'};">${formatINR(v)}</td></tr>`;
+  }).join('');
+
   const html=`<!DOCTYPE html><html><head><meta charset="UTF-8">
   <title>Money Tracker Report</title>
   <style>
     body{font-family:Arial,sans-serif;font-size:13px;color:#212121;margin:24px;}
     h1{font-size:20px;color:#4A148C;margin-bottom:4px;}
     h2{font-size:14px;color:#6200EE;margin:18px 0 6px;border-bottom:2px solid #EDE7F6;padding-bottom:4px;}
+    h3{font-size:12px;color:#888;margin:10px 0 4px;text-transform:uppercase;letter-spacing:0.4px;}
     table{width:100%;border-collapse:collapse;margin-bottom:12px;}
     th{background:#EDE7F6;padding:7px 10px;text-align:left;font-size:12px;}
     td{padding:7px 10px;border-bottom:1px solid #EEE;}
-    .grid{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;margin-bottom:14px;}
+    .grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px;}
+    .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:14px;}
     .box{border-radius:8px;padding:12px;text-align:center;}
     .box.ob{background:#FFF8E1;} .box.cb{background:#F3E5F5;}
     .box.inc{background:#E8F5E9;} .box.exp{background:#FFEBEE;}
     .box.net{background:#E3F2FD;} .box.cnt{background:#EDE7F6;}
     .box-label{font-size:10px;color:#757575;font-weight:600;text-transform:uppercase;}
     .box-val{font-size:16px;font-weight:700;margin-top:4px;}
+    .bal-section{border:1px solid #E0E0E0;border-radius:8px;padding:12px;}
+    .transfer-tag{font-size:10px;background:#EDE7F6;color:#6200EE;padding:1px 5px;border-radius:3px;margin-left:4px;}
     .footer{margin-top:24px;font-size:11px;color:#999;border-top:1px solid #EEE;padding-top:8px;}
   </style></head><body>
   <h1>💰 My Money Tracker — Report</h1>
@@ -2152,6 +2367,20 @@ function downloadReportPDF(){
     <div class="box exp"><div class="box-label">Total Expense</div><div class="box-val" style="color:#C62828;">${formatINR(d.exp)}</div></div>
     <div class="box net"><div class="box-label">Net Balance</div><div class="box-val" style="color:#1565C0;">${formatINR(d.net)}</div></div>
     <div class="box cnt"><div class="box-label">Transactions</div><div class="box-val" style="color:#6200EE;">${d.txns.length}</div></div>
+  </div>
+
+  <h2>Balance by Account</h2>
+  <div class="grid2">
+    <div class="bal-section">
+      <h3>Opening Balance</h3>
+      <table><tr><th>Account</th><th style="text-align:right;">Balance</th></tr>
+      ${accBalRows(d.openAccBal)}</table>
+    </div>
+    <div class="bal-section">
+      <h3>Closing Balance</h3>
+      <table><tr><th>Account</th><th style="text-align:right;">Balance</th></tr>
+      ${accBalRows(closeAccBal)}</table>
+    </div>
   </div>
 
   <h2>Account Breakdown</h2>
@@ -2175,7 +2404,8 @@ function downloadReportPDF(){
   <h2>All Transactions (${d.txns.length})</h2>
   <table><tr><th>Date</th><th>Description</th><th>Account</th><th>Category</th><th>Type</th><th style="text-align:right;">Amount</th></tr>
   ${[...d.txns].reverse().map(t=>`<tr>
-    <td>${escHtml(t.date)}</td><td>${escHtml(t.description)}${t.selfTransfer===1?' [Transfer]':''}</td>
+    <td>${escHtml(t.date)}</td>
+    <td>${escHtml(t.description)}${t.selfTransfer===1?'<span class="transfer-tag">TRANSFER</span>':''}</td>
     <td>${escHtml(t.account)}</td><td>${escHtml(t.category)}</td>
     <td style="color:${t.type==='Income'?'#2E7D32':'#C62828'};">${t.type}</td>
     <td style="text-align:right;color:${t.type==='Income'?'#2E7D32':'#C62828'};">${t.type==='Income'?'+':'-'}${formatINR(t.amount)}</td>
