@@ -1507,7 +1507,7 @@ function renderDashboard(){
     <div class="txn-item">
       <span class="account-badge ${accountClass(t.account)}">${t.account==='UNION BANK'?'UB':t.account}</span>
       <div class="txn-info">
-        <div class="txn-desc">${escHtml(t.description)}${t.selfTransfer===1?'<span class="transfer-badge">TRANSFER</span>':''}</div>
+        <div class="txn-desc">${escHtml(t.description)}${t.selfTransfer===1?'<span class="transfer-badge">SELF TRANSFER</span>':''}</div>
         <div class="txn-meta">${fmtDisplayDate(t.date)} · ${escHtml(t.category)}</div>
       </div>
       <div class="txn-amount ${t.type==='Income'?'income':'expense'}">${t.type==='Income'?'+':'-'}${formatINR(t.amount)}</div>
@@ -1541,7 +1541,7 @@ function renderHistory(query=''){
       <div class="history-card-top">
         <span class="account-badge ${accountClass(t.account)}">${t.account==='UNION BANK'?'UB':t.account}</span>
         <div class="history-card-info">
-          <div class="history-card-desc">${escHtml(t.description)}${t.selfTransfer===1?'<span class="transfer-badge">TRANSFER</span>':''}</div>
+          <div class="history-card-desc">${escHtml(t.description)}${t.selfTransfer===1?'<span class="transfer-badge">SELF TRANSFER</span>':''}</div>
           <div class="history-card-meta">${fmtDisplayDate(t.date)} · ${escHtml(t.category)} · ${escHtml(t.paymentMode)}</div>
         </div>
         <div class="history-card-amount ${t.type==='Income'?'income':'expense'}">${t.type==='Income'?'+':'-'}${formatINR(t.amount)}</div>
@@ -2184,7 +2184,7 @@ function renderReport(txns, txnsBalance, txnsAll, inclSelf){
       <div class="txn-item">
         <span class="account-badge ${accountClass(t.account)}">${t.account==='UNION BANK'?'UB':t.account}</span>
         <div class="txn-info">
-          <div class="txn-desc">${escHtml(t.description)}${t.selfTransfer===1?'<span class="transfer-badge">TRANSFER</span>':''}</div>
+          <div class="txn-desc">${escHtml(t.description)}${t.selfTransfer===1?'<span class="transfer-badge">SELF TRANSFER</span>':''}</div>
           <div class="txn-meta">${fmtDisplayDate(t.date)} · ${escHtml(t.category)} · ${escHtml(t.paymentMode)}</div>
         </div>
         <div class="txn-amount ${t.type==='Income'?'income':'expense'}">${t.type==='Income'?'+':'-'}${formatINR(t.amount)}</div>
