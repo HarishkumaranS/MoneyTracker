@@ -779,10 +779,10 @@ select.form-input option{background:var(--card);color:var(--text);}
             <button class="filter-seg-btn" data-type="Income" onclick="toggleTypeFilter(this)">INCOME</button>
             <button class="filter-seg-btn" data-type="Expense" onclick="toggleTypeFilter(this)">EXPENSE</button>
           </div>
-          <!-- All transactions always shown — self-transfer checkbox kept hidden for balance logic -->
-          <input type="checkbox" id="report-self-transfer" checked style="display:none;">
-          <div style="margin-top:14px;font-size:11px;color:var(--accent);padding:8px 10px;background:rgba(187,134,252,0.08);border-radius:8px;border:1px solid rgba(187,134,252,0.2);">
-            ℹ️ All transactions (including self-transfers) are always shown in reports and PDF.
+          <!-- Self Transfer Filter — controls calculations & summaries; transaction LIST always shows all -->
+          <div class="check-row" style="margin-top:14px;">
+            <input type="checkbox" id="report-self-transfer">
+            <label for="report-self-transfer">Include Self Transfers in summaries</label>
           </div>
           <button class="btn-primary" onclick="applyReportFilter()" style="margin-top:12px;">APPLY FILTER</button>
         </div>
@@ -1948,11 +1948,12 @@ function applyReportFilter(){
   const periodVal=[...document.querySelectorAll('input[name=period]')].find(r=>r.checked)?.value||'month';
   const inclSelf=document.getElementById('report-self-transfer').checked;
 
-  // Both display and balance always include ALL transactions (including self-transfers)
-  // Checkbox is hidden/always-checked; all records always shown in report & PDF
-  let txns=state.transactions;
-  // Balance txns: ALWAYS includes self-transfers — checkbox never affects balances
+  // txns: respects self-transfer checkbox — used for summaries, categories, balances
+  let txns=inclSelf?state.transactions:state.transactions.filter(t=>t.selfTransfer!==1);
+  // txnsBalance: ALWAYS includes self-transfers — used for opening/closing balance & account breakdown
   let txnsBalance=state.transactions;
+  // txnsAll: ALWAYS includes self-transfers — used ONLY for the transaction list display & PDF table
+  let txnsAll=state.transactions;
 
   // Period filter — applied to BOTH display and balance arrays
   const applyPeriod=(arr)=>{
@@ -1986,16 +1987,21 @@ function applyReportFilter(){
   };
   txns=applyPeriod(txns);
   txnsBalance=applyPeriod(txnsBalance);
+  txnsAll=applyPeriod(txnsAll);
 
-  // Account filter — applied to BOTH
+  // Account filter — applied to ALL three
   if(state.filterAcc!=='ALL'){
     txns=txns.filter(t=>t.account===state.filterAcc);
     txnsBalance=txnsBalance.filter(t=>t.account===state.filterAcc);
+    txnsAll=txnsAll.filter(t=>t.account===state.filterAcc);
   }
-  // Type filter — display only; balance always uses all types for accuracy
-  if(state.filterType!=='ALL') txns=txns.filter(t=>t.type===state.filterType);
+  // Type filter — applied to txns (calcs) and txnsAll (display), NOT txnsBalance (balance needs all types)
+  if(state.filterType!=='ALL'){
+    txns=txns.filter(t=>t.type===state.filterType);
+    txnsAll=txnsAll.filter(t=>t.type===state.filterType);
+  }
 
-  renderReport(txns, txnsBalance, inclSelf);
+  renderReport(txns, txnsBalance, txnsAll, inclSelf);
 }
 
 /* Build category bar rows helper */
@@ -2015,15 +2021,17 @@ function catBarsHtml(entries,maxVal,colorClass){
 let lastReportData=null;
 
 /*
- * renderReport(txns, txnsBalance, inclSelf)
- *   txns        — filtered transactions for display & category breakdown
- *   txnsBalance — always includes self-transfers; used for all balance calculations
- *   inclSelf    — whether self-transfers are shown in the list
+ * renderReport(txns, txnsBalance, txnsAll, inclSelf)
+ *   txns        — filtered by checkbox; used for inc/exp/net summary & category breakdown
+ *   txnsBalance — always includes self-transfers; used for opening/closing balance & account breakdown
+ *   txnsAll     — always includes self-transfers (same period/account/type filters as txns);
+ *                 used ONLY for the transaction list display and PDF transaction table
+ *   inclSelf    — whether self-transfers are included in summaries
  */
-function renderReport(txns, txnsBalance, inclSelf){
+function renderReport(txns, txnsBalance, txnsAll, inclSelf){
   inclSelf=!!inclSelf;
   const res=document.getElementById('report-results');
-  if(txns.length===0 && txnsBalance.length===0){
+  if(txnsBalance.length===0){
     res.innerHTML=`<div class="empty-state"><div class="empty-state-icon">📊</div><div class="empty-state-title">No data for selected filters</div></div>`;
     lastReportData=null;
     return;
@@ -2097,10 +2105,11 @@ function renderReport(txns, txnsBalance, inclSelf){
   const maxExp=expCats[0]?expCats[0][1]:1;
   const maxNet=Math.max(...Object.values(netCatMap).map(Math.abs),1);
 
-  const txnList=[...txns].reverse();
+  // Transaction list display uses txnsAll — ALWAYS shows all records including self-transfers
+  const txnList=[...txnsAll].reverse();
 
-  // Store for PDF
-  lastReportData={txns,txnsBalance,inc,exp,net,openBal,closeBal,openAccBal,accMap,incCats,expCats,netCats,inclSelf};
+  // Store for PDF — txnsAll used for PDF transaction table
+  lastReportData={txns,txnsBalance,txnsAll,inc,exp,net,openBal,closeBal,openAccBal,accMap,incCats,expCats,netCats,inclSelf};
 
   res.innerHTML=`
     <!-- Opening / Closing — clickable for account breakdown -->
@@ -2169,8 +2178,8 @@ function renderReport(txns, txnsBalance, inclSelf){
         </div>`).join('')}
     </div>
 
-    <!-- Transactions list -->
-    <div class="section-title">Transactions (${txnList.length})</div>
+    <!-- Transactions list — always shows ALL records including self-transfers -->
+    <div class="section-title">All Transactions (${txnList.length})</div>
     ${txnList.map(t=>`
       <div class="txn-item">
         <span class="account-badge ${accountClass(t.account)}">${t.account==='UNION BANK'?'UB':t.account}</span>
@@ -2422,8 +2431,8 @@ function downloadReportPDF(){
 
   /* ─── ALL TRANSACTIONS ─── */
   checkPage(20);
-  y = addSection(`All Transactions (${d.txns.length}) — Self-transfers included`, y);
-  const txnRows = [...d.txns].reverse().map(t => [
+  y = addSection(`All Transactions (${d.txnsAll.length}) — Self-transfers always included`, y);
+  const txnRows = [...d.txnsAll].reverse().map(t => [
     t.date,
     t.description + (t.selfTransfer===1 ? ' [T]' : ''),
     t.account === 'UNION BANK' ? 'UB' : t.account,
