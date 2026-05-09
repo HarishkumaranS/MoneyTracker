@@ -35,6 +35,8 @@ or localhost to work. On file:// it will fall back to PIN.
 <meta name="theme-color" content="#121212">
 <title>My Money Tracker</title>
 <link rel="icon" type="image/png" href="logo.png">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
 <style>
 /* ============================================================
    CSS VARIABLES & RESET
@@ -777,10 +779,10 @@ select.form-input option{background:var(--card);color:var(--text);}
             <button class="filter-seg-btn" data-type="Income" onclick="toggleTypeFilter(this)">INCOME</button>
             <button class="filter-seg-btn" data-type="Expense" onclick="toggleTypeFilter(this)">EXPENSE</button>
           </div>
-          <!-- Self Transfer Filter -->
-          <div class="check-row" style="margin-top:14px;">
-            <input type="checkbox" id="report-self-transfer">
-            <label for="report-self-transfer">Show Self Transfers in list</label>
+          <!-- All transactions always shown — self-transfer checkbox kept hidden for balance logic -->
+          <input type="checkbox" id="report-self-transfer" checked style="display:none;">
+          <div style="margin-top:14px;font-size:11px;color:var(--accent);padding:8px 10px;background:rgba(187,134,252,0.08);border-radius:8px;border:1px solid rgba(187,134,252,0.2);">
+            ℹ️ All transactions (including self-transfers) are always shown in reports and PDF.
           </div>
           <button class="btn-primary" onclick="applyReportFilter()" style="margin-top:12px;">APPLY FILTER</button>
         </div>
@@ -1946,8 +1948,9 @@ function applyReportFilter(){
   const periodVal=[...document.querySelectorAll('input[name=period]')].find(r=>r.checked)?.value||'month';
   const inclSelf=document.getElementById('report-self-transfer').checked;
 
-  // Display txns: respects self-transfer checkbox for list/summary visibility
-  let txns=inclSelf?state.transactions:state.transactions.filter(t=>t.selfTransfer!==1);
+  // Both display and balance always include ALL transactions (including self-transfers)
+  // Checkbox is hidden/always-checked; all records always shown in report & PDF
+  let txns=state.transactions;
   // Balance txns: ALWAYS includes self-transfers — checkbox never affects balances
   let txnsBalance=state.transactions;
 
@@ -2222,114 +2225,257 @@ function showReportBalPopup(type){
   document.getElementById('bal-popup').classList.add('show');
 }
 
-/* ─── PDF Export ─────────────────────────────────────────── */
+/* ─── PDF Export (real PDF via jsPDF + autoTable) ───────── */
 function downloadReportPDF(){
   if(!lastReportData){showToast('Apply filter first','error');return;}
-  const d=lastReportData;
-  const now=new Date().toLocaleDateString('en-IN');
+  if(!window.jspdf){showToast('PDF library not loaded yet — try again','error');return;}
 
-  const rows=(arr)=>arr.map(([k,v])=>`
-    <tr><td>${escHtml(k)}</td><td style="text-align:right;">${formatINR(v)}</td></tr>`).join('');
+  const d = lastReportData;
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({orientation:'portrait', unit:'mm', format:'a4'});
 
-  // Account-wise closing balance = opening + period net per account (from txnsBalance)
-  const closeAccBal={
-    union: d.openAccBal.union + d.accMap['UNION BANK'].n,
-    sbi:   d.openAccBal.sbi   + d.accMap['SBI'].n,
-    cash:  d.openAccBal.cash  + d.accMap['CASH'].n
+  const pageW  = doc.internal.pageSize.getWidth();
+  const pageH  = doc.internal.pageSize.getHeight();
+  const margin = 13;
+  const cW     = pageW - margin * 2;
+  const now    = new Date().toLocaleDateString('en-IN');
+  let y = margin;
+
+  /* ── helpers ── */
+  const fmtAmt = (v) => {
+    const sign = v < 0 ? '-' : '';
+    const abs  = Math.abs(v);
+    const s    = abs.toFixed(2);
+    const [int, dec] = s.split('.');
+    const last3 = int.slice(-3);
+    const rest  = int.slice(0, -3);
+    const fmt   = rest ? rest.replace(/\B(?=(\d{2})+(?!\d))/g,',') + ',' + last3 : last3;
+    return sign + 'Rs.' + fmt + (dec !== '00' ? '.' + dec : '');
   };
 
-  const accBalRows=(balObj)=>['UNION BANK','SBI','CASH'].map(a=>{
-    const key=a==='UNION BANK'?'union':a==='SBI'?'sbi':'cash';
-    const v=balObj[key];
-    return `<tr><td>${a}</td><td style="text-align:right;color:${v>=0?'#2E7D32':'#C62828'};">${formatINR(v)}</td></tr>`;
-  }).join('');
+  const addSection = (title, topY) => {
+    if(topY + 12 > pageH - 10){ doc.addPage(); topY = margin; }
+    doc.setFontSize(11);
+    doc.setFont('helvetica','bold');
+    doc.setTextColor(98, 0, 238);
+    doc.text(title, margin, topY);
+    doc.setDrawColor(200, 180, 255);
+    doc.setLineWidth(0.3);
+    doc.line(margin, topY + 1.5, margin + cW, topY + 1.5);
+    return topY + 7;
+  };
 
-  const html=`<!DOCTYPE html><html><head><meta charset="UTF-8">
-  <title>Money Tracker Report</title>
-  <style>
-    body{font-family:Arial,sans-serif;font-size:13px;color:#212121;margin:24px;}
-    h1{font-size:20px;color:#4A148C;margin-bottom:4px;}
-    h2{font-size:14px;color:#6200EE;margin:18px 0 6px;border-bottom:2px solid #EDE7F6;padding-bottom:4px;}
-    h3{font-size:12px;color:#888;margin:10px 0 4px;text-transform:uppercase;letter-spacing:0.4px;}
-    table{width:100%;border-collapse:collapse;margin-bottom:12px;}
-    th{background:#EDE7F6;padding:7px 10px;text-align:left;font-size:12px;}
-    td{padding:7px 10px;border-bottom:1px solid #EEE;}
-    .grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px;}
-    .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:14px;}
-    .box{border-radius:8px;padding:12px;text-align:center;}
-    .box.ob{background:#FFF8E1;} .box.cb{background:#F3E5F5;}
-    .box.inc{background:#E8F5E9;} .box.exp{background:#FFEBEE;}
-    .box.net{background:#E3F2FD;} .box.cnt{background:#EDE7F6;}
-    .box-label{font-size:10px;color:#757575;font-weight:600;text-transform:uppercase;}
-    .box-val{font-size:16px;font-weight:700;margin-top:4px;}
-    .bal-section{border:1px solid #E0E0E0;border-radius:8px;padding:12px;}
-    .transfer-tag{font-size:10px;background:#EDE7F6;color:#6200EE;padding:1px 5px;border-radius:3px;margin-left:4px;}
-    .footer{margin-top:24px;font-size:11px;color:#999;border-top:1px solid #EEE;padding-top:8px;}
-  </style></head><body>
-  <h1>💰 My Money Tracker — Report</h1>
-  <p style="color:#757575;margin-bottom:14px;">Generated: ${now}</p>
+  const checkPage = (needed) => {
+    if(y + needed > pageH - 10){ doc.addPage(); y = margin; }
+  };
 
-  <div class="grid">
-    <div class="box ob"><div class="box-label">Opening Balance</div><div class="box-val" style="color:#F9A825;">${formatINR(d.openBal)}</div></div>
-    <div class="box cb"><div class="box-label">Closing Balance</div><div class="box-val" style="color:#7B1FA2;">${formatINR(d.closeBal)}</div></div>
-    <div class="box inc"><div class="box-label">Total Income</div><div class="box-val" style="color:#2E7D32;">${formatINR(d.inc)}</div></div>
-    <div class="box exp"><div class="box-label">Total Expense</div><div class="box-val" style="color:#C62828;">${formatINR(d.exp)}</div></div>
-    <div class="box net"><div class="box-label">Net Balance</div><div class="box-val" style="color:#1565C0;">${formatINR(d.net)}</div></div>
-    <div class="box cnt"><div class="box-label">Transactions</div><div class="box-val" style="color:#6200EE;">${d.txns.length}</div></div>
-  </div>
+  /* ─── PAGE HEADER ─── */
+  doc.setFillColor(74, 20, 140);
+  doc.rect(0, 0, pageW, 18, 'F');
+  doc.setFontSize(14);
+  doc.setFont('helvetica','bold');
+  doc.setTextColor(255,255,255);
+  doc.text('My Money Tracker — Report', margin, 11);
+  doc.setFontSize(8);
+  doc.setFont('helvetica','normal');
+  doc.text(`Generated: ${now}`, pageW - margin, 11, {align:'right'});
+  y = 24;
 
-  <h2>Balance by Account</h2>
-  <div class="grid2">
-    <div class="bal-section">
-      <h3>Opening Balance</h3>
-      <table><tr><th>Account</th><th style="text-align:right;">Balance</th></tr>
-      ${accBalRows(d.openAccBal)}</table>
-    </div>
-    <div class="bal-section">
-      <h3>Closing Balance</h3>
-      <table><tr><th>Account</th><th style="text-align:right;">Balance</th></tr>
-      ${accBalRows(closeAccBal)}</table>
-    </div>
-  </div>
+  /* ─── SUMMARY BOX ROW ─── */
+  const summaryItems = [
+    {label:'Opening Balance', value: fmtAmt(d.openBal),  bg:[255,248,225], txt:[249,168,37]},
+    {label:'Closing Balance', value: fmtAmt(d.closeBal), bg:[243,229,245], txt:[123,31,162]},
+    {label:'Total Income',    value: fmtAmt(d.inc),      bg:[232,245,233], txt:[46,125,50]},
+    {label:'Total Expense',   value: fmtAmt(d.exp),      bg:[255,235,238], txt:[198,40,40]},
+    {label:'Net Balance',     value: fmtAmt(d.net),      bg:[227,242,253], txt:[21,101,192]},
+    {label:'Transactions',    value: String(d.txns.length), bg:[237,231,246], txt:[98,0,238]},
+  ];
+  const boxW = (cW - 3) / 3;
+  const boxH = 14;
+  [[0,1,2],[3,4,5]].forEach((row, ri) => {
+    row.forEach((idx, ci) => {
+      const item = summaryItems[idx];
+      const bx = margin + ci * (boxW + 1.5);
+      const by = y + ri * (boxH + 2);
+      doc.setFillColor(...item.bg);
+      doc.roundedRect(bx, by, boxW, boxH, 1.5, 1.5, 'F');
+      doc.setFontSize(6.5);
+      doc.setFont('helvetica','bold');
+      doc.setTextColor(117,117,117);
+      doc.text(item.label.toUpperCase(), bx + boxW/2, by + 4, {align:'center'});
+      doc.setFontSize(8.5);
+      doc.setFont('helvetica','bold');
+      doc.setTextColor(...item.txt);
+      doc.text(item.value, bx + boxW/2, by + 10.5, {align:'center'});
+    });
+  });
+  y += (boxH + 2) * 2 + 5;
 
-  <h2>Account Breakdown</h2>
-  <table><tr><th>Account</th><th>Income</th><th>Expense</th><th>Net</th></tr>
-  ${['UNION BANK','SBI','CASH'].map(a=>`<tr>
-    <td><strong>${a}</strong></td>
-    <td style="color:#2E7D32;">${formatINR(d.accMap[a].i)}</td>
-    <td style="color:#C62828;">${formatINR(d.accMap[a].e)}</td>
-    <td style="color:${d.accMap[a].n>=0?'#1565C0':'#C62828'};">${formatINR(d.accMap[a].n)}</td>
-  </tr>`).join('')}</table>
+  /* ─── BALANCE BY ACCOUNT ─── */
+  const closeAccBal = {
+    union: d.openAccBal.union + d.accMap['UNION BANK'].n,
+    sbi:   d.openAccBal.sbi   + d.accMap['SBI'].n,
+    cash:  d.openAccBal.cash  + d.accMap['CASH'].n,
+  };
+  checkPage(40);
+  y = addSection('Balance by Account', y);
+  const balTableW = (cW - 4) / 2;
+  ['Opening','Closing'].forEach((label, i) => {
+    const bx = margin + i * (balTableW + 4);
+    const obj = i === 0 ? d.openAccBal : closeAccBal;
+    doc.autoTable({
+      startY: y,
+      tableWidth: balTableW,
+      margin: {left: bx, right: pageW - bx - balTableW},
+      head: [[label + ' Balance', 'Amount']],
+      body: [
+        ['UNION BANK', fmtAmt(obj.union)],
+        ['SBI',        fmtAmt(obj.sbi)],
+        ['CASH',       fmtAmt(obj.cash)],
+        ['Total',      fmtAmt(obj.union + obj.sbi + obj.cash)],
+      ],
+      styles:{fontSize:8, cellPadding:2.5},
+      headStyles:{fillColor:[74,20,140], textColor:255, fontStyle:'bold', fontSize:8},
+      columnStyles:{1:{halign:'right'}},
+      bodyStyles:{textColor:[33,33,33]},
+      didParseCell(data){
+        if(data.section==='body' && data.column.index===1){
+          const rawVal = data.cell.raw;
+          const numVal = parseFloat(rawVal.replace(/[^0-9.\-]/g,''));
+          if(numVal < 0) data.cell.styles.textColor = [198,40,40];
+          else data.cell.styles.textColor = [46,125,50];
+        }
+        if(data.section==='body' && data.row.index===3){
+          data.cell.styles.fontStyle='bold';
+          data.cell.styles.fillColor=[245,245,245];
+        }
+      },
+    });
+  });
+  y = doc.lastAutoTable.finalY + 6;
 
-  <h2>Income by Category</h2>
-  <table><tr><th>Category</th><th style="text-align:right;">Amount</th></tr>${rows(d.incCats)}</table>
+  /* ─── ACCOUNT BREAKDOWN ─── */
+  checkPage(30);
+  y = addSection('Account Breakdown (includes self-transfers)', y);
+  doc.autoTable({
+    startY: y,
+    margin: {left: margin, right: margin},
+    head: [['Account','Income','Expense','Net']],
+    body: ['UNION BANK','SBI','CASH'].map(a => [
+      a,
+      fmtAmt(d.accMap[a].i),
+      fmtAmt(d.accMap[a].e),
+      fmtAmt(d.accMap[a].n),
+    ]),
+    styles:{fontSize:8.5, cellPadding:3},
+    headStyles:{fillColor:[74,20,140], textColor:255, fontStyle:'bold'},
+    columnStyles:{1:{halign:'right'},2:{halign:'right'},3:{halign:'right'}},
+    didParseCell(data){
+      if(data.section==='body'){
+        if(data.column.index===1) data.cell.styles.textColor=[46,125,50];
+        if(data.column.index===2) data.cell.styles.textColor=[198,40,40];
+        if(data.column.index===3){
+          const v=parseFloat(data.cell.raw.replace(/[^0-9.\-]/g,''));
+          data.cell.styles.textColor = v >= 0 ? [21,101,192] : [198,40,40];
+          data.cell.styles.fontStyle='bold';
+        }
+      }
+    },
+  });
+  y = doc.lastAutoTable.finalY + 6;
 
-  <h2>Expense by Category</h2>
-  <table><tr><th>Category</th><th style="text-align:right;">Amount</th></tr>${rows(d.expCats)}</table>
+  /* ─── CATEGORY BREAKDOWN ─── */
+  if(d.incCats.length || d.expCats.length){
+    checkPage(30);
+    y = addSection('Category Breakdown', y);
+    if(d.incCats.length){
+      checkPage(20);
+      doc.setFontSize(8); doc.setFont('helvetica','bold');
+      doc.setTextColor(46,125,50);
+      doc.text('Income by Category', margin, y); y += 3;
+      doc.autoTable({
+        startY: y, margin:{left:margin, right:margin},
+        head:[['Category','Amount']],
+        body: d.incCats.map(([k,v])=>[k, fmtAmt(v)]),
+        styles:{fontSize:8, cellPadding:2.5},
+        headStyles:{fillColor:[46,125,50], textColor:255, fontStyle:'bold'},
+        columnStyles:{1:{halign:'right', textColor:[46,125,50]}},
+      });
+      y = doc.lastAutoTable.finalY + 4;
+    }
+    if(d.expCats.length){
+      checkPage(20);
+      doc.setFontSize(8); doc.setFont('helvetica','bold');
+      doc.setTextColor(198,40,40);
+      doc.text('Expense by Category', margin, y); y += 3;
+      doc.autoTable({
+        startY: y, margin:{left:margin, right:margin},
+        head:[['Category','Amount']],
+        body: d.expCats.map(([k,v])=>[k, fmtAmt(v)]),
+        styles:{fontSize:8, cellPadding:2.5},
+        headStyles:{fillColor:[198,40,40], textColor:255, fontStyle:'bold'},
+        columnStyles:{1:{halign:'right', textColor:[198,40,40]}},
+      });
+      y = doc.lastAutoTable.finalY + 4;
+    }
+  }
 
-  <h2>Net by Category</h2>
-  <table><tr><th>Category</th><th style="text-align:right;">Net</th></tr>${rows(d.netCats)}</table>
+  /* ─── ALL TRANSACTIONS ─── */
+  checkPage(20);
+  y = addSection(`All Transactions (${d.txns.length}) — Self-transfers included`, y);
+  const txnRows = [...d.txns].reverse().map(t => [
+    t.date,
+    t.description + (t.selfTransfer===1 ? ' [T]' : ''),
+    t.account === 'UNION BANK' ? 'UB' : t.account,
+    t.category,
+    t.paymentMode,
+    t.type,
+    (t.type==='Income'?'+':'-') + fmtAmt(t.amount),
+  ]);
+  doc.autoTable({
+    startY: y,
+    margin: {left: margin, right: margin},
+    head: [['Date','Description','Acct','Category','Payment','Type','Amount']],
+    body: txnRows,
+    styles:{fontSize:7, cellPadding:2},
+    headStyles:{fillColor:[74,20,140], textColor:255, fontStyle:'bold', fontSize:7},
+    columnStyles:{
+      0:{cellWidth:22},
+      1:{cellWidth:48},
+      2:{cellWidth:12},
+      3:{cellWidth:22},
+      4:{cellWidth:22},
+      5:{cellWidth:16},
+      6:{cellWidth:26, halign:'right'},
+    },
+    didParseCell(data){
+      if(data.section==='body' && data.column.index===6){
+        const raw = data.cell.raw || '';
+        data.cell.styles.textColor = raw.startsWith('+') ? [46,125,50] : [198,40,40];
+        data.cell.styles.fontStyle = 'bold';
+      }
+      if(data.section==='body' && data.row.raw[1] && data.row.raw[1].includes('[T]')){
+        data.cell.styles.fillColor=[243,229,245];
+      }
+    },
+  });
+  y = doc.lastAutoTable.finalY + 4;
 
-  <h2>All Transactions (${d.txns.length})</h2>
-  <table><tr><th>Date</th><th>Description</th><th>Account</th><th>Category</th><th>Type</th><th style="text-align:right;">Amount</th></tr>
-  ${[...d.txns].reverse().map(t=>`<tr>
-    <td>${escHtml(t.date)}</td>
-    <td>${escHtml(t.description)}${t.selfTransfer===1?'<span class="transfer-tag">TRANSFER</span>':''}</td>
-    <td>${escHtml(t.account)}</td><td>${escHtml(t.category)}</td>
-    <td style="color:${t.type==='Income'?'#2E7D32':'#C62828'};">${t.type}</td>
-    <td style="text-align:right;color:${t.type==='Income'?'#2E7D32':'#C62828'};">${t.type==='Income'?'+':'-'}${formatINR(t.amount)}</td>
-  </tr>`).join('')}</table>
+  /* ─── FOOTER on each page ─── */
+  const totalPages = doc.internal.getNumberOfPages();
+  for(let p=1; p<=totalPages; p++){
+    doc.setPage(p);
+    doc.setFontSize(7);
+    doc.setFont('helvetica','normal');
+    doc.setTextColor(150,150,150);
+    doc.text(`My Money Tracker · Report generated on ${now} · Page ${p} of ${totalPages}`,
+      pageW/2, pageH - 6, {align:'center'});
+  }
 
-  <div class="footer">My Money Tracker · Report generated on ${now}</div>
-  </body></html>`;
-
-  const blob=new Blob([html],{type:'text/html'});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement('a');
-  a.href=url; a.download=`MoneyTracker_Report_${now.replace(/\//g,'-')}.html`;
-  document.body.appendChild(a); a.click();
-  document.body.removeChild(a); URL.revokeObjectURL(url);
-  showToast('PDF Report downloaded! ✓','success');
+  /* ─── SAVE ─── */
+  const fileName = `MoneyTracker_Report_${now.replace(/\//g,'-')}.pdf`;
+  doc.save(fileName);
+  showToast('PDF downloaded! ✓','success');
 }
 
 /* ============================================================
