@@ -660,7 +660,7 @@ select.form-input option{background:var(--card);color:var(--text);}
           <button class="seg-btn account-seg" id="acc-cash" onclick="selectAccount('CASH')">&#x1F4B5; CASH</button>
         </div>
       </div>
-      <!-- Self Transfer Checkbox — immediately after Account -->
+      <!-- Self Transfer Checkbox -->
       <div class="card" style="padding:12px 16px;margin-bottom:12px;">
         <label class="check-row" style="padding:4px 0;">
           <input type="checkbox" id="self-transfer-chk" onchange="toggleSelfTransferForm()">
@@ -675,7 +675,7 @@ select.form-input option{background:var(--card);color:var(--text);}
           </div>
         </div>
       </div>
-      <!-- Type row — hidden when Self Transfer is checked -->
+      <!-- Type row -->
       <div class="form-group" id="type-row-group">
         <label class="form-label">Type</label>
         <div class="seg-group">
@@ -779,7 +779,6 @@ select.form-input option{background:var(--card);color:var(--text);}
             <button class="filter-seg-btn" data-type="Income" onclick="toggleTypeFilter(this)">INCOME</button>
             <button class="filter-seg-btn" data-type="Expense" onclick="toggleTypeFilter(this)">EXPENSE</button>
           </div>
-          <!-- Self Transfer Filter — controls calculations & summaries; transaction LIST always shows all -->
           <div class="check-row" style="margin-top:14px;">
             <input type="checkbox" id="report-self-transfer">
             <label for="report-self-transfer">Include Self Transfers in summaries</label>
@@ -1352,17 +1351,7 @@ function generateId(txns){
 /* ============================================================
    DASHBOARD RENDER
    ============================================================ */
-/*
- * BALANCE CALCULATION RULES:
- * - Account balances (My Accounts, Opening, Current) always include
- *   ALL transactions including self-transfers, regardless of checkbox.
- * - The "Include Self Transfers" checkbox only affects the
- *   income/expense/net summary numbers for the month, and
- *   the recent transaction list display.
- */
-
 function calcBalances(){
-  // Always includes ALL transactions (including self-transfers) for accurate account balances
   const bal={union:0,sbi:0,cash:0};
   if (state.initialBalances) {
     state.initialBalances.forEach(t=>{
@@ -1372,7 +1361,6 @@ function calcBalances(){
       else bal.cash+=amt;
     });
   }
-  // Balances always include self-transfers regardless of checkbox
   state.transactions.forEach(t=>{
     const amt=t.type==='Income'?t.amount:-t.amount;
     if(t.account==='UNION BANK') bal.union+=amt;
@@ -1383,7 +1371,6 @@ function calcBalances(){
 }
 
 function calcMonthSummary(includeSelf){
-  // This month's income/expense summary — respects the checkbox for display purposes
   const now=new Date();
   const m=String(now.getMonth()+1).padStart(2,'0');
   const y=String(now.getFullYear());
@@ -1399,7 +1386,6 @@ function calcMonthSummary(includeSelf){
   return {income:inc,expense:exp,net:inc-exp};
 }
 
-/* Balance at start of current month — ALWAYS includes self-transfers */
 function calcOpeningBalance(){
   const now=new Date();
   const m=String(now.getMonth()+1).padStart(2,'0');
@@ -1411,7 +1397,6 @@ function calcOpeningBalance(){
       total += t.type==='Income'?t.amount:-t.amount;
     });
   }
-  // Balances always include self-transfers regardless of checkbox
   state.transactions.forEach(t=>{
     const iso=ddmmyyyyToISO(t.date);
     if(iso<firstDayISO){
@@ -1421,7 +1406,6 @@ function calcOpeningBalance(){
   return total;
 }
 
-/* Current total balance — ALWAYS includes self-transfers */
 function calcCurrentBalance(){
   let total=0;
   if(state.initialBalances){
@@ -1429,7 +1413,6 @@ function calcCurrentBalance(){
       total += t.type==='Income'?t.amount:-t.amount;
     });
   }
-  // Balances always include self-transfers regardless of checkbox
   state.transactions.forEach(t=>{
     total += t.type==='Income'?t.amount:-t.amount;
   });
@@ -1443,11 +1426,8 @@ function toggleDashSelfTransfer(){
 
 function renderDashboard(){
   const inc=state.dashIncludeSelf;
-  // Account balances always include all transactions
   const bal=calcBalances();
-  // Month summary respects checkbox
   const mo=calcMonthSummary(inc);
-  // Opening/current balances always include all transactions
   const openBal=calcOpeningBalance();
   const curBal=calcCurrentBalance();
   const recent=[...state.transactions].reverse().slice(0,5);
@@ -1848,7 +1828,6 @@ function switchTab(tab){
    BALANCE BREAKDOWN POPUP
    ============================================================ */
 function showBalPopup(type){
-  // Balance popups ALWAYS include all transactions (including self-transfers)
   const bal={union:0,sbi:0,cash:0};
   const add=(t)=>{
     const amt=t.type==='Income'?t.amount:-t.amount;
@@ -1856,24 +1835,19 @@ function showBalPopup(type){
     else if(t.account==='SBI') bal.sbi+=amt;
     else bal.cash+=amt;
   };
-  // Initial balances always included
   if(state.initialBalances) state.initialBalances.forEach(add);
   if(type==='opening'){
     const now=new Date();
     const m=String(now.getMonth()+1).padStart(2,'0');
     const y=String(now.getFullYear());
     const firstDayISO=y+'-'+m+'-01';
-    // Balances always include self-transfers for accurate account values
     state.transactions.forEach(t=>{
       if(ddmmyyyyToISO(t.date)<firstDayISO) add(t);
     });
     document.getElementById('bal-popup-title').textContent='Opening Balance';
     document.getElementById('bal-popup-subtitle').textContent='Account balances at start of this month';
   } else {
-    // Balances always include self-transfers for accurate account values
-    state.transactions.forEach(t=>{
-      add(t);
-    });
+    state.transactions.forEach(t=>{ add(t); });
     document.getElementById('bal-popup-title').textContent='Current Balance';
     document.getElementById('bal-popup-subtitle').textContent='Account balances right now';
   }
@@ -1937,25 +1911,14 @@ function toggleFilterPanel(){
   chev.classList.toggle('open');
 }
 
-/*
- * applyReportFilter — two arrays are computed:
- *   txns         → for display (list, category breakdown, inc/exp summary)
- *                  respects self-transfer checkbox
- *   txnsBalance  → for ALL balance calculations (always includes self-transfers)
- *                  same period + account filter, self-transfer filter NEVER applied
- */
 function applyReportFilter(){
   const periodVal=[...document.querySelectorAll('input[name=period]')].find(r=>r.checked)?.value||'month';
   const inclSelf=document.getElementById('report-self-transfer').checked;
 
-  // txns: respects self-transfer checkbox — used for summaries, categories, balances
   let txns=inclSelf?state.transactions:state.transactions.filter(t=>t.selfTransfer!==1);
-  // txnsBalance: ALWAYS includes self-transfers — used for opening/closing balance & account breakdown
   let txnsBalance=state.transactions;
-  // txnsAll: ALWAYS includes self-transfers — used ONLY for the transaction list display & PDF table
   let txnsAll=state.transactions;
 
-  // Period filter — applied to BOTH display and balance arrays
   const applyPeriod=(arr)=>{
     if(periodVal==='date'){
       const d=isoToDDMMYYYY(document.getElementById('filter-date').value);
@@ -1989,13 +1952,11 @@ function applyReportFilter(){
   txnsBalance=applyPeriod(txnsBalance);
   txnsAll=applyPeriod(txnsAll);
 
-  // Account filter — applied to ALL three
   if(state.filterAcc!=='ALL'){
     txns=txns.filter(t=>t.account===state.filterAcc);
     txnsBalance=txnsBalance.filter(t=>t.account===state.filterAcc);
     txnsAll=txnsAll.filter(t=>t.account===state.filterAcc);
   }
-  // Type filter — applied to txns (calcs) and txnsAll (display), NOT txnsBalance (balance needs all types)
   if(state.filterType!=='ALL'){
     txns=txns.filter(t=>t.type===state.filterType);
     txnsAll=txnsAll.filter(t=>t.type===state.filterType);
@@ -2020,14 +1981,6 @@ function catBarsHtml(entries,maxVal,colorClass){
 /* Store last report data for PDF export */
 let lastReportData=null;
 
-/*
- * renderReport(txns, txnsBalance, txnsAll, inclSelf)
- *   txns        — filtered by checkbox; used for inc/exp/net summary & category breakdown
- *   txnsBalance — always includes self-transfers; used for opening/closing balance & account breakdown
- *   txnsAll     — always includes self-transfers (same period/account/type filters as txns);
- *                 used ONLY for the transaction list display and PDF transaction table
- *   inclSelf    — whether self-transfers are included in summaries
- */
 function renderReport(txns, txnsBalance, txnsAll, inclSelf){
   inclSelf=!!inclSelf;
   const res=document.getElementById('report-results');
@@ -2037,31 +1990,25 @@ function renderReport(txns, txnsBalance, txnsAll, inclSelf){
     return;
   }
 
-  // Summary inc/exp from display txns (respects checkbox)
   const inc=txns.filter(t=>t.type==='Income').reduce((s,t)=>s+t.amount,0);
   const exp=txns.filter(t=>t.type==='Expense').reduce((s,t)=>s+t.amount,0);
   const net=inc-exp;
 
-  // Opening balance = all initial balances + all txns before earliest date in filter
-  // Always includes self-transfers for accuracy
   const sortedDates=txnsBalance.map(t=>ddmmyyyyToISO(t.date)).filter(Boolean).sort();
   const firstDate=sortedDates[0]||'';
   let openBal=0;
   if(state.initialBalances){
     state.initialBalances.forEach(t=>{ openBal+=t.type==='Income'?t.amount:-t.amount; });
   }
-  // Opening balance always includes self-transfers for accurate balances
   state.transactions.forEach(t=>{
     const iso=ddmmyyyyToISO(t.date);
     if(iso<firstDate){ openBal+=t.type==='Income'?t.amount:-t.amount; }
   });
 
-  // Closing balance uses txnsBalance (always includes self-transfers)
   const balNet=txnsBalance.filter(t=>t.type==='Income').reduce((s,t)=>s+t.amount,0)
               -txnsBalance.filter(t=>t.type==='Expense').reduce((s,t)=>s+t.amount,0);
   const closeBal=openBal+balNet;
 
-  // Per-account opening balance — always includes self-transfers
   const openAccBal={union:0,sbi:0,cash:0};
   if(state.initialBalances) state.initialBalances.forEach(t=>{
     const amt=t.type==='Income'?t.amount:-t.amount;
@@ -2069,7 +2016,6 @@ function renderReport(txns, txnsBalance, txnsAll, inclSelf){
     else if(t.account==='SBI') openAccBal.sbi+=amt;
     else openAccBal.cash+=amt;
   });
-  // openAccBal always includes self-transfers for accurate account balances
   state.transactions.forEach(t=>{
     const iso=ddmmyyyyToISO(t.date);
     if(iso<firstDate){
@@ -2080,7 +2026,6 @@ function renderReport(txns, txnsBalance, txnsAll, inclSelf){
     }
   });
 
-  // Account breakdown uses txnsBalance (always includes self-transfers) for accurate account movement
   const accMap={};
   ['UNION BANK','SBI','CASH'].forEach(a=>{
     const ai=txnsBalance.filter(t=>t.account===a&&t.type==='Income').reduce((s,t)=>s+t.amount,0);
@@ -2088,7 +2033,6 @@ function renderReport(txns, txnsBalance, txnsAll, inclSelf){
     accMap[a]={i:ai,e:ae,n:ai-ae};
   });
 
-  // Category breakdown from display txns
   const incCatMap={}, expCatMap={}, netCatMap={};
   txns.forEach(t=>{
     const k=t.category||'Others';
@@ -2105,14 +2049,11 @@ function renderReport(txns, txnsBalance, txnsAll, inclSelf){
   const maxExp=expCats[0]?expCats[0][1]:1;
   const maxNet=Math.max(...Object.values(netCatMap).map(Math.abs),1);
 
-  // Transaction list display uses txnsAll — ALWAYS shows all records including self-transfers
   const txnList=[...txnsAll].reverse();
 
-  // Store for PDF — txnsAll used for PDF transaction table
   lastReportData={txns,txnsBalance,txnsAll,inc,exp,net,openBal,closeBal,openAccBal,accMap,incCats,expCats,netCats,inclSelf};
 
   res.innerHTML=`
-    <!-- Opening / Closing — clickable for account breakdown -->
     <div class="report-summary-grid">
       <div class="report-summary-card ob-card" onclick="showReportBalPopup('opening')">
         <div class="rsc-label">Opening Balance</div>
@@ -2125,7 +2066,6 @@ function renderReport(txns, txnsBalance, txnsAll, inclSelf){
         <div class="rsc-value cb">${formatINR(closeBal)}</div>
       </div>
     </div>
-    <!-- Summary -->
     <div class="report-summary-grid">
       <div class="report-summary-card income-card">
         <div class="rsc-label">Total Income</div>
@@ -2145,7 +2085,6 @@ function renderReport(txns, txnsBalance, txnsAll, inclSelf){
       </div>
     </div>
 
-    <!-- Account Breakdown — always includes self-transfers -->
     <div class="card">
       <div class="section-title" style="margin-top:0;">Account Breakdown</div>
       <table class="report-table">
@@ -2160,7 +2099,6 @@ function renderReport(txns, txnsBalance, txnsAll, inclSelf){
       </table>
     </div>
 
-    <!-- Category Breakdown — 3 sections -->
     <div class="card">
       <div class="section-title" style="margin-top:0;">Category Breakdown</div>
       <div class="cat-section-title income-hdr">▲ Income by Category</div>
@@ -2178,7 +2116,6 @@ function renderReport(txns, txnsBalance, txnsAll, inclSelf){
         </div>`).join('')}
     </div>
 
-    <!-- Transactions list — always shows ALL records including self-transfers -->
     <div class="section-title">All Transactions (${txnList.length})</div>
     ${txnList.map(t=>`
       <div class="txn-item">
@@ -2190,14 +2127,12 @@ function renderReport(txns, txnsBalance, txnsAll, inclSelf){
         <div class="txn-amount ${t.type==='Income'?'income':'expense'}">${t.type==='Income'?'+':'-'}${formatINR(t.amount)}</div>
       </div>`).join('')}
 
-    <!-- PDF Export -->
     <button class="btn-pdf" onclick="downloadReportPDF()">📄 Download PDF Report</button>
     <div style="height:20px;"></div>
   `;
   document.getElementById('page-reports').scrollTo({top:document.getElementById('report-results').offsetTop-80,behavior:'smooth'});
 }
 
-/* Show balance popup from report view — always uses txnsBalance */
 function showReportBalPopup(type){
   if(!lastReportData) return;
   const d=lastReportData;
@@ -2209,7 +2144,6 @@ function showReportBalPopup(type){
     document.getElementById('bal-popup-title').textContent='Opening Balance';
     document.getElementById('bal-popup-subtitle').textContent='Account balances at period start';
   } else {
-    // Closing = opening + period transactions per account (from txnsBalance — always includes self-transfers)
     ['UNION BANK','SBI','CASH'].forEach(a=>{
       const key=a==='UNION BANK'?'union':a==='SBI'?'sbi':'cash';
       bal[key]=d.openAccBal[key]+d.accMap[a].n;
@@ -2234,7 +2168,13 @@ function showReportBalPopup(type){
   document.getElementById('bal-popup').classList.add('show');
 }
 
-/* ─── PDF Export (real PDF via jsPDF + autoTable) ───────── */
+/* ============================================================
+   PDF EXPORT — UPDATED v2
+   Column widths verified: all tables = 182mm (pageW 210 - margins 28)
+   Txn table: Date(22)+Desc(58)+Tag(22)+Acct(21)+Cat(21)+Type(15)+Amt(23)=182
+   Account:   Acct(38)+Inc(48)+Exp(48)+Net(48)=182
+   Category:  Cat(105)+Net(77)=182
+   ============================================================ */
 function downloadReportPDF(){
   if(!lastReportData){showToast('Apply filter first','error');return;}
   if(!window.jspdf){showToast('PDF library not loaded yet — try again','error');return;}
@@ -2246,40 +2186,41 @@ function downloadReportPDF(){
   const pageW  = doc.internal.pageSize.getWidth();   // 210mm
   const pageH  = doc.internal.pageSize.getHeight();  // 297mm
   const margin = 14;
-  const cW     = pageW - margin * 2;                 // 182mm content width
-  const now    = new Date().toLocaleDateString('en-IN');
+  const cW     = pageW - margin * 2;                 // 182mm
+  const now    = new Date().toLocaleDateString('en-IN', {day:'2-digit',month:'short',year:'numeric'});
   let y = margin;
 
-  /* ── Amount formatter ── */
+  /* ── Amount formatter ─────────────────────────────────── */
   const fmtAmt = (v) => {
     const sign = v < 0 ? '-' : '';
     const abs  = Math.abs(v);
-    const s    = abs.toFixed(2);
-    const [intPart, dec] = s.split('.');
+    const [intPart, dec] = abs.toFixed(2).split('.');
     const last3 = intPart.slice(-3);
     const rest  = intPart.slice(0, -3);
-    const fmt   = rest ? rest.replace(/\B(?=(\d{2})+(?!\d))/g, ',') + ',' + last3 : last3;
+    const fmt   = rest
+      ? rest.replace(/\B(?=(\d{2})+(?!\d))/g, ',') + ',' + last3
+      : last3;
     return sign + 'Rs.' + fmt + (dec !== '00' ? '.' + dec : '');
   };
 
-  /* ── Month name arrays ── */
+  /* ── Month arrays ─────────────────────────────────────── */
   const MONTHS_LONG  = ['January','February','March','April','May','June',
                         'July','August','September','October','November','December'];
   const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun',
                         'Jul','Aug','Sep','Oct','Nov','Dec'];
 
-  /* ── Dynamic heading & filename from current filter UI ── */
+  /* ── Dynamic heading & filename ───────────────────────── */
   const periodVal = [...document.querySelectorAll('input[name=period]')]
                       .find(r => r.checked)?.value || 'month';
-  let reportHeading = 'Report';
+  let reportHeading = 'Finance Report';
   let fileName      = 'MoneyTracker_Report.pdf';
 
   if (periodVal === 'month') {
-    const mo = document.getElementById('filter-month').value;          // '04'
-    const yr = document.getElementById('filter-month-year').value;     // '2026'
-    const monthName = MONTHS_LONG[parseInt(mo) - 1];
-    reportHeading = `Monthly Report — ${monthName} ${yr}`;
-    fileName      = `Monthly_Report_${monthName}_${yr}.pdf`;
+    const mo  = document.getElementById('filter-month').value;
+    const yr  = document.getElementById('filter-month-year').value;
+    const mName = MONTHS_LONG[parseInt(mo) - 1];
+    reportHeading = `Monthly Report — ${mName} ${yr}`;
+    fileName      = `Monthly_Report_${mName}_${yr}.pdf`;
 
   } else if (periodVal === 'year') {
     const yr = document.getElementById('filter-year').value;
@@ -2301,298 +2242,339 @@ function downloadReportPDF(){
     if (fv && tv) {
       const [fy, fm, fd] = fv.split('-');
       const [ty, tm, td] = tv.split('-');
-      const fromSh = MONTHS_SHORT[parseInt(fm) - 1];
-      const toSh   = MONTHS_SHORT[parseInt(tm) - 1];
-      reportHeading = `Custom Report — ${fd}-${fromSh}-${fy} to ${td}-${toSh}-${ty}`;
-      fileName      = `Custom_Report_${fd}${fromSh}${fy}_to_${td}${toSh}${ty}.pdf`;
+      const fSh = MONTHS_SHORT[parseInt(fm) - 1];
+      const tSh = MONTHS_SHORT[parseInt(tm) - 1];
+      reportHeading = `Custom Report — ${fd}-${fSh}-${fy} to ${td}-${tSh}-${ty}`;
+      fileName      = `Custom_Report_${fd}${fSh}${fy}_to_${td}${tSh}${ty}.pdf`;
     }
   }
 
-  /* ── Active filter labels ── */
+  /* ── Filter summary line ──────────────────────────────── */
   const accLabel  = state.filterAcc  !== 'ALL' ? state.filterAcc  : 'All Accounts';
   const typeLabel = state.filterType !== 'ALL' ? state.filterType : 'All Types';
-  const selfLabel = d.inclSelf ? 'Self Transfers: Included in summaries'
-                               : 'Self Transfers: Excluded from summaries';
+  const selfLabel = d.inclSelf
+    ? 'Self Transfers: Included in summaries'
+    : 'Self Transfers: Excluded from summaries';
 
-  /* ── Section header helper ── */
+  /* ── Helpers ──────────────────────────────────────────── */
+  const checkPage = (needed) => {
+    if (y + needed > pageH - 18) { doc.addPage(); y = margin; }
+  };
+
   const addSection = (title) => {
-    if (y + 14 > pageH - 12) { doc.addPage(); y = margin; }
-    doc.setFontSize(10);
+    checkPage(16);
+    doc.setFontSize(9.5);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(74, 20, 140);
     doc.text(title, margin, y);
+    y += 2.5;
     doc.setDrawColor(187, 134, 252);
-    doc.setLineWidth(0.4);
-    doc.line(margin, y + 2, margin + cW, y + 2);
-    y += 7;
+    doc.setLineWidth(0.45);
+    doc.line(margin, y, margin + cW, y);
+    y += 6.5;
   };
 
-  const checkPage = (needed) => {
-    if (y + needed > pageH - 12) { doc.addPage(); y = margin; }
-  };
-
-  /* ════════════════════════════════════════════════════════════
-     PAGE HEADER — purple bar + app name
-     ════════════════════════════════════════════════════════════ */
-  doc.setFillColor(74, 20, 140);
-  doc.rect(0, 0, pageW, 20, 'F');
-  doc.setFontSize(12);
+  /* ═══════════════════════════════════════════════════════
+     PAGE HEADER BANNER
+     ═══════════════════════════════════════════════════════ */
+  doc.setFillColor(58, 12, 115);
+  doc.rect(0, 0, pageW, 22, 'F');
+  /* logo circle */
+  doc.setFillColor(187, 134, 252);
+  doc.circle(margin + 5, 11, 4.5, 'F');
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(58, 12, 115);
+  doc.text('M', margin + 5, 11 + 1.5, { align: 'center' });
+  /* app name */
+  doc.setFontSize(12.5);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(255, 255, 255);
-  doc.text('My Money Tracker', margin, 10);
+  doc.text('My Money Tracker', margin + 13, 10);
   doc.setFontSize(7.5);
   doc.setFont('helvetica', 'normal');
-  doc.text(`Generated: ${now}`, pageW - margin, 10, { align: 'right' });
+  doc.setTextColor(210, 175, 255);
+  doc.text('Personal Finance Tracker', margin + 13, 16.5);
+  doc.setFontSize(7.5);
+  doc.setTextColor(200, 170, 250);
+  doc.text(`Generated: ${now}`, pageW - margin, 11, { align: 'right' });
 
-  /* ── Dynamic report heading ── */
-  y = 28;
-  doc.setFontSize(17);
+  y = 32;
+
+  /* ── Report heading ──────────────────────────────────── */
+  doc.setFontSize(15);
   doc.setFont('helvetica', 'bold');
-  doc.setTextColor(50, 0, 100);
+  doc.setTextColor(42, 0, 85);
   doc.text(reportHeading, margin, y);
-  y += 7;
+  y += 6.5;
 
-  /* ── Filter info line ── */
-  doc.setFontSize(8);
+  /* ── Filter info row ──────────────────────────────────── */
+  doc.setFontSize(7.5);
   doc.setFont('helvetica', 'normal');
-  doc.setTextColor(100, 100, 100);
+  doc.setTextColor(110, 90, 140);
   doc.text(`Account: ${accLabel}   |   Type: ${typeLabel}   |   ${selfLabel}`, margin, y);
-  y += 4;
+  y += 3.5;
 
-  /* ── Decorative divider ── */
-  doc.setDrawColor(187, 134, 252);
-  doc.setLineWidth(0.6);
+  doc.setDrawColor(210, 190, 240);
+  doc.setLineWidth(0.5);
   doc.line(margin, y, margin + cW, y);
-  y += 8;
+  y += 9;
 
-  /* ════════════════════════════════════════════════════════════
-     SUMMARY BOXES — 2 rows × 3 cols
-     ════════════════════════════════════════════════════════════ */
+  /* ═══════════════════════════════════════════════════════
+     SUMMARY BOXES  (2 rows × 3 cols)
+     ═══════════════════════════════════════════════════════ */
   const summaryItems = [
-    { label:'Opening Balance', value: fmtAmt(d.openBal),      bg:[255,248,225], txt:[230,148,0]  },
-    { label:'Closing Balance', value: fmtAmt(d.closeBal),     bg:[243,229,245], txt:[123,31,162] },
-    { label:'Total Income',    value: fmtAmt(d.inc),          bg:[232,245,233], txt:[46,125,50]  },
-    { label:'Total Expense',   value: fmtAmt(d.exp),          bg:[255,235,238], txt:[198,40,40]  },
-    { label:'Net Balance',     value: fmtAmt(d.net),          bg:[227,242,253], txt:[21,101,192] },
-    { label:'Total Records',   value: String(d.txnsAll.length), bg:[237,231,246], txt:[98,0,238] },
+    { label:'Opening Balance', value:fmtAmt(d.openBal),        bg:[255,248,220], border:[200,150,0],  txt:[140,100,0]  },
+    { label:'Closing Balance', value:fmtAmt(d.closeBal),       bg:[243,229,245], border:[150,80,200], txt:[90,20,140]  },
+    { label:'Total Income',    value:fmtAmt(d.inc),            bg:[232,245,233], border:[80,170,90],  txt:[27,94,32]   },
+    { label:'Total Expense',   value:fmtAmt(d.exp),            bg:[255,235,238], border:[220,80,80],  txt:[183,28,28]  },
+    { label:'Net Balance',     value:fmtAmt(d.net),            bg:[227,242,253], border:[70,130,200], txt:[13,71,161]  },
+    { label:'Total Records',   value:String(d.txnsAll.length), bg:[237,231,246], border:[130,80,200], txt:[74,20,140]  },
   ];
-  const boxW = (cW - 5) / 3;   // gap of 2.5mm between boxes
-  const boxH = 16;
+
+  const boxGapX = 3.5;
+  const boxW    = (cW - boxGapX * 2) / 3;
+  const boxH    = 18;
+  const boxGapY = 3.5;
+
   [[0,1,2],[3,4,5]].forEach((row, ri) => {
     row.forEach((idx, ci) => {
       const item = summaryItems[idx];
-      const bx = margin + ci * (boxW + 2.5);
-      const by = y + ri * (boxH + 3);
+      const bx = margin + ci * (boxW + boxGapX);
+      const by = y + ri * (boxH + boxGapY);
       doc.setFillColor(...item.bg);
-      doc.roundedRect(bx, by, boxW, boxH, 2, 2, 'F');
-      doc.setFontSize(6.5);
+      doc.roundedRect(bx, by, boxW, boxH, 2.5, 2.5, 'F');
+      doc.setDrawColor(...item.border);
+      doc.setLineWidth(0.35);
+      doc.roundedRect(bx, by, boxW, boxH, 2.5, 2.5, 'S');
+      /* top colour strip */
+      doc.setFillColor(...item.border);
+      doc.rect(bx + 0.35, by + 0.35, boxW - 0.7, 2.2, 'F');
+      /* label */
+      doc.setFontSize(6.3);
       doc.setFont('helvetica', 'bold');
-      doc.setTextColor(120, 120, 120);
-      doc.text(item.label.toUpperCase(), bx + boxW / 2, by + 5.5, { align: 'center' });
-      // Fit long values by reducing font if needed
-      doc.setFontSize(item.value.length > 12 ? 7.5 : 9);
+      doc.setTextColor(95, 75, 120);
+      doc.text(item.label.toUpperCase(), bx + boxW / 2, by + 7.5, { align: 'center' });
+      /* value — shrink font for long values */
+      const vLen = item.value.length;
+      const vSize = vLen > 15 ? 6.8 : vLen > 12 ? 8 : 9.5;
+      doc.setFontSize(vSize);
       doc.setFont('helvetica', 'bold');
       doc.setTextColor(...item.txt);
-      doc.text(item.value, bx + boxW / 2, by + 12, { align: 'center' });
+      doc.text(item.value, bx + boxW / 2, by + 14, { align: 'center' });
     });
   });
-  y += (boxH + 3) * 2 + 8;
+  y += (boxH + boxGapY) * 2 + 11;
 
-  /* ════════════════════════════════════════════════════════════
-     BALANCE BY ACCOUNT — opening & closing side by side
-     ════════════════════════════════════════════════════════════ */
+  /* ═══════════════════════════════════════════════════════
+     BALANCE BY ACCOUNT  (Opening | Closing side by side)
+     ═══════════════════════════════════════════════════════ */
   const closeAccBal = {
-    union: d.openAccBal.union + d.accMap['UNION BANK'].n,
-    sbi:   d.openAccBal.sbi   + d.accMap['SBI'].n,
-    cash:  d.openAccBal.cash  + d.accMap['CASH'].n,
+    union : d.openAccBal.union + d.accMap['UNION BANK'].n,
+    sbi   : d.openAccBal.sbi   + d.accMap['SBI'].n,
+    cash  : d.openAccBal.cash  + d.accMap['CASH'].n,
   };
-  checkPage(52);
+
+  checkPage(55);
   addSection('Balance by Account');
-  const balW = (cW - 6) / 2;
-  ['Opening', 'Closing'].forEach((label, i) => {
-    const bx  = margin + i * (balW + 6);
+
+  const halfW = (cW - 6) / 2;
+
+  ['Opening','Closing'].forEach((label, i) => {
+    const bx  = margin + i * (halfW + 6);
     const obj = i === 0 ? d.openAccBal : closeAccBal;
     const tot = obj.union + obj.sbi + obj.cash;
+    const hdrColor = i === 0 ? [190,130,0] : [100,20,150];
+
     doc.autoTable({
-      startY: y,
-      tableWidth: balW,
-      margin: { left: bx, right: pageW - bx - balW },
-      head: [[{ content: label + ' Balance', colSpan: 2,
-                styles: { halign: 'center', fontStyle: 'bold', fontSize: 8 } }]],
-      body: [
+      startY      : y,
+      tableWidth  : halfW,
+      margin      : { left: bx, right: pageW - bx - halfW },
+      head        : [[{
+        content : label + ' Balance',
+        colSpan : 2,
+        styles  : { halign:'center', fontStyle:'bold', fontSize:8.5,
+                    fillColor: hdrColor, textColor:[255,255,255], cellPadding:3.5 }
+      }]],
+      body : [
         ['Union Bank', fmtAmt(obj.union)],
         ['SBI',        fmtAmt(obj.sbi)],
         ['Cash',       fmtAmt(obj.cash)],
-        [{ content: 'TOTAL', styles: { fontStyle: 'bold', fillColor: [240,235,255] } },
-         { content: fmtAmt(tot), styles: { fontStyle: 'bold', halign: 'right',
-           fillColor: [240,235,255],
-           textColor: tot >= 0 ? [46,125,50] : [198,40,40] } }],
+        [{content:'TOTAL', styles:{fontStyle:'bold', fillColor:[238,232,252], textColor:[50,0,100]}},
+         {content:fmtAmt(tot), styles:{fontStyle:'bold', halign:'right',
+            fillColor:[238,232,252],
+            textColor: tot>=0?[27,94,32]:[183,28,28]}}],
       ],
-      styles: { fontSize: 8, cellPadding: 3, overflow: 'linebreak', valign: 'middle' },
-      headStyles: { fillColor: [74,20,140], textColor: 255 },
+      styles      : { fontSize:8.5, cellPadding:[3,5,3,5], overflow:'linebreak', valign:'middle' },
       columnStyles: {
-        0: { cellWidth: balW * 0.55 },
-        1: { cellWidth: balW * 0.45, halign: 'right' },
+        0 : { cellWidth: halfW * 0.52 },
+        1 : { cellWidth: halfW * 0.48, halign:'right' },
       },
+      alternateRowStyles : { fillColor:[250,246,255] },
       didParseCell(data) {
-        if (data.section === 'body' && data.column.index === 1 && data.row.index < 3) {
-          const v = parseFloat(String(data.cell.raw).replace(/[^0-9.\-]/g, ''));
-          data.cell.styles.textColor = v >= 0 ? [46,125,50] : [198,40,40];
+        if (data.section==='body' && data.column.index===1 && data.row.index < 3) {
+          const v = parseFloat(String(data.cell.raw).replace(/[^0-9.\-]/g,''));
+          data.cell.styles.textColor  = v >= 0 ? [27,94,32] : [183,28,28];
+          data.cell.styles.fontStyle  = 'bold';
         }
       },
     });
   });
-  y = doc.lastAutoTable.finalY + 8;
+  y = doc.lastAutoTable.finalY + 11;
 
-  /* ════════════════════════════════════════════════════════════
-     ACCOUNT BREAKDOWN — income / expense / net per account
-     ════════════════════════════════════════════════════════════ */
-  checkPage(38);
-  addSection('Account Breakdown (includes self-transfers)');
-  // Column widths: Acct(42) + Inc(46) + Exp(46) + Net(48) = 182mm
+  /* ═══════════════════════════════════════════════════════
+     ACCOUNT BREAKDOWN
+     Acct(38) + Income(48) + Expense(48) + Net(48) = 182mm
+     ═══════════════════════════════════════════════════════ */
+  checkPage(42);
+  addSection('Account Breakdown  (always includes self-transfers)');
+
   doc.autoTable({
-    startY: y,
-    margin: { left: margin, right: margin },
-    head: [['Account', 'Income', 'Expense', 'Net']],
-    body: ['UNION BANK','SBI','CASH'].map(a => [
-      a === 'UNION BANK' ? 'Union Bank' : a === 'SBI' ? 'SBI' : 'Cash',
+    startY      : y,
+    margin      : { left:margin, right:margin },
+    tableWidth  : cW,
+    head        : [['Account','Income','Expense','Net']],
+    body        : ['UNION BANK','SBI','CASH'].map(a => [
+      a==='UNION BANK' ? 'Union Bank' : a,
       fmtAmt(d.accMap[a].i),
       fmtAmt(d.accMap[a].e),
       fmtAmt(d.accMap[a].n),
     ]),
-    styles: { fontSize: 9, cellPadding: 3.5, overflow: 'linebreak', valign: 'middle' },
-    headStyles: { fillColor: [74,20,140], textColor: 255, fontStyle: 'bold',
-                  halign: 'center', fontSize: 8.5 },
-    alternateRowStyles: { fillColor: [248,245,255] },
+    styles      : { fontSize:9, cellPadding:[4,5,4,5], overflow:'linebreak', valign:'middle',
+                    lineColor:[225,210,245], lineWidth:0.15 },
+    headStyles  : { fillColor:[74,20,140], textColor:[255,255,255],
+                    fontStyle:'bold', fontSize:8.5, halign:'center', cellPadding:[4,5,4,5] },
+    alternateRowStyles : { fillColor:[248,245,255] },
     columnStyles: {
-      0: { cellWidth: 42 },
-      1: { cellWidth: (cW - 42) / 3, halign: 'right' },
-      2: { cellWidth: (cW - 42) / 3, halign: 'right' },
-      3: { cellWidth: (cW - 42) / 3, halign: 'right' },
+      0 : { cellWidth:38 },
+      1 : { cellWidth:48, halign:'right' },
+      2 : { cellWidth:48, halign:'right' },
+      3 : { cellWidth:48, halign:'right' },
     },
     didParseCell(data) {
-      if (data.section === 'body') {
-        if (data.column.index === 1) data.cell.styles.textColor = [46,125,50];
-        if (data.column.index === 2) data.cell.styles.textColor = [198,40,40];
-        if (data.column.index === 3) {
-          const v = parseFloat(String(data.cell.raw).replace(/[^0-9.\-]/g, ''));
-          data.cell.styles.textColor = v >= 0 ? [21,101,192] : [198,40,40];
-          data.cell.styles.fontStyle = 'bold';
+      if (data.section==='body') {
+        if (data.column.index===1) { data.cell.styles.textColor=[27,94,32];  data.cell.styles.fontStyle='bold'; }
+        if (data.column.index===2) { data.cell.styles.textColor=[183,28,28]; data.cell.styles.fontStyle='bold'; }
+        if (data.column.index===3) {
+          const v = parseFloat(String(data.cell.raw).replace(/[^0-9.\-]/g,''));
+          data.cell.styles.textColor  = v>=0?[13,71,161]:[183,28,28];
+          data.cell.styles.fontStyle  = 'bold';
         }
       }
     },
   });
-  y = doc.lastAutoTable.finalY + 8;
+  y = doc.lastAutoTable.finalY + 11;
 
-  /* ════════════════════════════════════════════════════════════
-     NET BY CATEGORY — only rows where net ≠ 0
-     ════════════════════════════════════════════════════════════ */
+  /* ═══════════════════════════════════════════════════════
+     NET BY CATEGORY  (zero-net rows omitted)
+     Cat(105) + Net Amount(77) = 182mm
+     ═══════════════════════════════════════════════════════ */
   const netCatsFiltered = d.netCats.filter(([, v]) => v !== 0);
   if (netCatsFiltered.length > 0) {
-    checkPage(35);
-    addSection('Net by Category  (Income − Expense, zero-net categories omitted)');
+    checkPage(38);
+    addSection('Net by Category  (Income − Expense · zero-net categories omitted)');
+
     doc.autoTable({
-      startY: y,
-      margin: { left: margin, right: margin },
-      head: [['Category', 'Net Amount (Income − Expense)']],
-      body: netCatsFiltered.map(([k, v]) => [k, fmtAmt(v)]),
-      styles: { fontSize: 9, cellPadding: 3.5, overflow: 'linebreak', valign: 'middle' },
-      headStyles: { fillColor: [33,150,243], textColor: 255, fontStyle: 'bold', fontSize: 8.5 },
-      alternateRowStyles: { fillColor: [240,248,255] },
+      startY      : y,
+      margin      : { left:margin, right:margin },
+      tableWidth  : cW,
+      head        : [['Category','Net Amount  (Income − Expense)']],
+      body        : netCatsFiltered.map(([k,v]) => [k, fmtAmt(v)]),
+      styles      : { fontSize:9, cellPadding:[4,5,4,5], overflow:'linebreak', valign:'middle',
+                      lineColor:[200,220,245], lineWidth:0.15 },
+      headStyles  : { fillColor:[13,71,161], textColor:[255,255,255],
+                      fontStyle:'bold', fontSize:8.5, cellPadding:[4,5,4,5] },
+      alternateRowStyles : { fillColor:[240,248,255] },
       columnStyles: {
-        0: { cellWidth: cW * 0.58 },
-        1: { cellWidth: cW * 0.42, halign: 'right', fontStyle: 'bold' },
+        0 : { cellWidth:105 },
+        1 : { cellWidth:77, halign:'right', fontStyle:'bold' },
       },
       didParseCell(data) {
-        if (data.section === 'body' && data.column.index === 1) {
-          const v = parseFloat(String(data.cell.raw).replace(/[^0-9.\-]/g, ''));
-          data.cell.styles.textColor = v >= 0 ? [46,125,50] : [198,40,40];
+        if (data.section==='body' && data.column.index===1) {
+          const v = parseFloat(String(data.cell.raw).replace(/[^0-9.\-]/g,''));
+          data.cell.styles.textColor = v>=0?[27,94,32]:[183,28,28];
         }
       },
     });
-    y = doc.lastAutoTable.finalY + 8;
+    y = doc.lastAutoTable.finalY + 11;
   }
 
-  /* ════════════════════════════════════════════════════════════
-     ALL TRANSACTIONS — with "Self Transfer" tag column
-     Columns: Date(20) + Desc(50) + SelfTag(24) + Acct(20) + Cat(22) + Type(16) + Amt(30) = 182mm
-     ════════════════════════════════════════════════════════════ */
-  checkPage(28);
-  addSection(`All Transactions (${d.txnsAll.length})`);
+  /* ═══════════════════════════════════════════════════════
+     ALL TRANSACTIONS
+     Date(22)+Desc(58)+Tag(22)+Acct(21)+Cat(21)+Type(15)+Amt(23) = 182mm
+     ═══════════════════════════════════════════════════════ */
+  checkPage(30);
+  addSection(`All Transactions  (${d.txnsAll.length} records · self-transfers shown)`);
+
   const txnRows = [...d.txnsAll].reverse().map(t => [
     t.date,
     t.description,
-    t.selfTransfer === 1 ? 'Self Transfer' : '',
-    t.account === 'UNION BANK' ? 'Union Bank' : t.account === 'SBI' ? 'SBI' : 'Cash',
-    t.category  || '—',
+    t.selfTransfer === 1 ? 'Self\nTransfer' : '',
+    t.account === 'UNION BANK' ? 'Union\nBank' : t.account,
+    t.category || '—',
     t.type,
-    (t.type === 'Income' ? '+' : '-') + fmtAmt(t.amount),
+    (t.type==='Income'?'+':'-') + fmtAmt(t.amount),
   ]);
+
   doc.autoTable({
-    startY: y,
-    margin: { left: margin, right: margin },
-    head: [['Date', 'Description', 'Tag', 'Account', 'Category', 'Type', 'Amount']],
-    body: txnRows,
-    styles: {
-      fontSize: 7.5, cellPadding: 2.8,
-      overflow: 'linebreak', valign: 'middle',
-    },
-    headStyles: {
-      fillColor: [74,20,140], textColor: 255, fontStyle: 'bold',
-      fontSize: 8, halign: 'center', cellPadding: 3,
-    },
-    alternateRowStyles: { fillColor: [250,248,255] },
+    startY      : y,
+    margin      : { left:margin, right:margin },
+    tableWidth  : cW,
+    head        : [['Date','Description','Tag','Account','Category','Type','Amount']],
+    body        : txnRows,
+    styles      : { fontSize:7.5, cellPadding:[3,3,3,3],
+                    overflow:'linebreak', valign:'middle',
+                    lineColor:[228,218,245], lineWidth:0.12 },
+    headStyles  : { fillColor:[74,20,140], textColor:[255,255,255],
+                    fontStyle:'bold', fontSize:7.5, halign:'center', cellPadding:[4,3,4,3] },
+    alternateRowStyles : { fillColor:[251,249,255] },
     columnStyles: {
-      0: { cellWidth: 20, halign: 'center' },
-      1: { cellWidth: 50 },                         // description wraps here
-      2: { cellWidth: 24, halign: 'center', fontStyle: 'bold', fontSize: 6.5 },
-      3: { cellWidth: 22, halign: 'center' },
-      4: { cellWidth: 22, halign: 'center' },
-      5: { cellWidth: 16, halign: 'center' },
-      6: { cellWidth: 28, halign: 'right', fontStyle: 'bold' },
+      0 : { cellWidth:22, halign:'center', fontSize:7   },
+      1 : { cellWidth:58, fontSize:7.5                  },
+      2 : { cellWidth:22, halign:'center', fontSize:6.5, fontStyle:'bold' },
+      3 : { cellWidth:21, halign:'center', fontSize:7   },
+      4 : { cellWidth:21, halign:'center', fontSize:7   },
+      5 : { cellWidth:15, halign:'center', fontSize:7,  fontStyle:'bold' },
+      6 : { cellWidth:23, halign:'right',  fontSize:7.5, fontStyle:'bold' },
     },
     didParseCell(data) {
-      if (data.section === 'body') {
-        // Highlight self-transfer tag cell
-        if (data.column.index === 2 && data.cell.raw === 'Self Transfer') {
-          data.cell.styles.textColor  = [123, 31, 162];
-          data.cell.styles.fillColor  = [243, 229, 245];
+      if (data.section==='body') {
+        /* Self Transfer tag cell */
+        if (data.column.index===2 && String(data.cell.raw).includes('Transfer')) {
+          data.cell.styles.textColor  = [100,20,150];
+          data.cell.styles.fillColor  = [243,229,245];
         }
-        // Colour Type cell
-        if (data.column.index === 5) {
-          data.cell.styles.textColor = data.cell.raw === 'Income'
-            ? [46,125,50] : [198,40,40];
-          data.cell.styles.fontStyle = 'bold';
+        /* Type colouring */
+        if (data.column.index===5) {
+          data.cell.styles.textColor = data.cell.raw==='Income'?[27,94,32]:[183,28,28];
         }
-        // Colour Amount cell
-        if (data.column.index === 6) {
-          const raw = String(data.cell.raw || '');
-          data.cell.styles.textColor = raw.startsWith('+') ? [46,125,50] : [198,40,40];
+        /* Amount colouring */
+        if (data.column.index===6) {
+          data.cell.styles.textColor = String(data.cell.raw||'').startsWith('+')?[27,94,32]:[183,28,28];
         }
-        // Tint entire self-transfer row lightly
-        if (data.row.raw[2] === 'Self Transfer' && data.column.index !== 2) {
-          data.cell.styles.fillColor = [250, 245, 255];
+        /* Tint entire self-transfer row */
+        if (String(data.row.raw[2]||'').includes('Transfer') && data.column.index!==2) {
+          data.cell.styles.fillColor = [250,244,255];
         }
       }
     },
   });
 
-  /* ════════════════════════════════════════════════════════════
-     FOOTER — on every page
-     ════════════════════════════════════════════════════════════ */
+  /* ═══════════════════════════════════════════════════════
+     FOOTER — stamped on every page
+     ═══════════════════════════════════════════════════════ */
   const totalPages = doc.internal.getNumberOfPages();
   for (let p = 1; p <= totalPages; p++) {
     doc.setPage(p);
-    // Bottom rule
     doc.setDrawColor(187, 134, 252);
     doc.setLineWidth(0.3);
-    doc.line(margin, pageH - 10, margin + cW, pageH - 10);
-    doc.setFontSize(7);
+    doc.line(margin, pageH - 12, margin + cW, pageH - 12);
+    doc.setFontSize(6.8);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(140, 100, 180);
     doc.text(
       `My Money Tracker  ·  ${reportHeading}  ·  Page ${p} of ${totalPages}`,
-      pageW / 2, pageH - 6, { align: 'center' }
+      pageW / 2, pageH - 7, { align: 'center' }
     );
   }
 
