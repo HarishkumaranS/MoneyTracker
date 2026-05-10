@@ -2169,419 +2169,426 @@ function showReportBalPopup(type){
 }
 
 /* ============================================================
-   PDF EXPORT — UPDATED v2
-   Column widths verified: all tables = 182mm (pageW 210 - margins 28)
-   Txn table: Date(22)+Desc(58)+Tag(22)+Acct(21)+Cat(21)+Type(15)+Amt(23)=182
-   Account:   Acct(38)+Inc(48)+Exp(48)+Net(48)=182
-   Category:  Cat(105)+Net(77)=182
+   DOWNLOAD PDF REPORT — FINAL UPDATED VERSION
    ============================================================ */
-function downloadReportPDF(){
-  if(!lastReportData){showToast('Apply filter first','error');return;}
-  if(!window.jspdf){showToast('PDF library not loaded yet — try again','error');return;}
+async function downloadReportPDF(){
+
+  // ✅ ALWAYS refresh latest report data before PDF
+  await generateReport();
+
+  if(!lastReportData){
+    showToast('Apply filter first','error');
+    return;
+  }
+
+  console.log("✅ NEW PDF FUNCTION RUNNING");
+
+  if(!window.jspdf){
+    showToast('PDF library not loaded yet — try again','error');
+    return;
+  }
 
   const d = lastReportData;
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({orientation:'portrait', unit:'mm', format:'a4'});
 
-  const pageW  = doc.internal.pageSize.getWidth();   // 210mm
-  const pageH  = doc.internal.pageSize.getHeight();  // 297mm
+  // ✅ DEBUG
+  console.log("PDF DATA:", d);
+  console.log("FIRST TXN:", d.txnsAll?.[0]);
+
+  const { jsPDF } = window.jspdf;
+
+  const doc = new jsPDF({
+    orientation:'portrait',
+    unit:'mm',
+    format:'a4'
+  });
+
+  const pageW  = doc.internal.pageSize.getWidth();
+  const pageH  = doc.internal.pageSize.getHeight();
+
   const margin = 14;
-  const cW     = pageW - margin * 2;                 // 182mm
-  const now    = new Date().toLocaleDateString('en-IN', {day:'2-digit',month:'short',year:'numeric'});
+  const cW     = pageW - margin * 2;
+
   let y = margin;
 
-  /* ── Amount formatter ─────────────────────────────────── */
+  /* ============================================================
+     FORMAT AMOUNT
+     ============================================================ */
   const fmtAmt = (v) => {
+
+    v = Number(v || 0);
+
     const sign = v < 0 ? '-' : '';
-    const abs  = Math.abs(v);
+
+    const abs = Math.abs(v);
+
     const [intPart, dec] = abs.toFixed(2).split('.');
+
     const last3 = intPart.slice(-3);
-    const rest  = intPart.slice(0, -3);
-    const fmt   = rest
+
+    const rest = intPart.slice(0, -3);
+
+    const fmt = rest
       ? rest.replace(/\B(?=(\d{2})+(?!\d))/g, ',') + ',' + last3
       : last3;
-    return sign + 'Rs.' + fmt + (dec !== '00' ? '.' + dec : '');
+
+    return sign + '₹' + fmt + (dec !== '00' ? '.' + dec : '');
   };
 
-  /* ── Month arrays ─────────────────────────────────────── */
-  const MONTHS_LONG  = ['January','February','March','April','May','June',
-                        'July','August','September','October','November','December'];
-  const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun',
-                        'Jul','Aug','Sep','Oct','Nov','Dec'];
-
-  /* ── Dynamic heading & filename ───────────────────────── */
-  const periodVal = [...document.querySelectorAll('input[name=period]')]
-                      .find(r => r.checked)?.value || 'month';
-  let reportHeading = 'Finance Report';
-  let fileName      = 'MoneyTracker_Report.pdf';
-
-  if (periodVal === 'month') {
-    const mo  = document.getElementById('filter-month').value;
-    const yr  = document.getElementById('filter-month-year').value;
-    const mName = MONTHS_LONG[parseInt(mo) - 1];
-    reportHeading = `Monthly Report — ${mName} ${yr}`;
-    fileName      = `Monthly_Report_${mName}_${yr}.pdf`;
-
-  } else if (periodVal === 'year') {
-    const yr = document.getElementById('filter-year').value;
-    reportHeading = `Year Report — ${yr}`;
-    fileName      = `Year_Report_${yr}.pdf`;
-
-  } else if (periodVal === 'date') {
-    const dv = document.getElementById('filter-date').value;
-    if (dv) {
-      const [yr, mo, dy] = dv.split('-');
-      const sh = MONTHS_SHORT[parseInt(mo) - 1];
-      reportHeading = `Daily Report — ${dy}-${sh}-${yr}`;
-      fileName      = `Daily_Report_${dy}${sh}${yr}.pdf`;
-    }
-
-  } else if (periodVal === 'range') {
-    const fv = document.getElementById('filter-from').value;
-    const tv = document.getElementById('filter-to').value;
-    if (fv && tv) {
-      const [fy, fm, fd] = fv.split('-');
-      const [ty, tm, td] = tv.split('-');
-      const fSh = MONTHS_SHORT[parseInt(fm) - 1];
-      const tSh = MONTHS_SHORT[parseInt(tm) - 1];
-      reportHeading = `Custom Report — ${fd}-${fSh}-${fy} to ${td}-${tSh}-${ty}`;
-      fileName      = `Custom_Report_${fd}${fSh}${fy}_to_${td}${tSh}${ty}.pdf`;
-    }
-  }
-
-  /* ── Filter summary line ──────────────────────────────── */
-  const accLabel  = state.filterAcc  !== 'ALL' ? state.filterAcc  : 'All Accounts';
-  const typeLabel = state.filterType !== 'ALL' ? state.filterType : 'All Types';
-  const selfLabel = d.inclSelf
-    ? 'Self Transfers: Included in summaries'
-    : 'Self Transfers: Excluded from summaries';
-
-  /* ── Helpers ──────────────────────────────────────────── */
-  const checkPage = (needed) => {
-    if (y + needed > pageH - 18) { doc.addPage(); y = margin; }
-  };
-
-  const addSection = (title) => {
-    checkPage(16);
-    doc.setFontSize(9.5);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(74, 20, 140);
-    doc.text(title, margin, y);
-    y += 2.5;
-    doc.setDrawColor(187, 134, 252);
-    doc.setLineWidth(0.45);
-    doc.line(margin, y, margin + cW, y);
-    y += 6.5;
-  };
-
-  /* ═══════════════════════════════════════════════════════
-     PAGE HEADER BANNER
-     ═══════════════════════════════════════════════════════ */
-  doc.setFillColor(58, 12, 115);
-  doc.rect(0, 0, pageW, 22, 'F');
-  /* logo circle */
-  doc.setFillColor(187, 134, 252);
-  doc.circle(margin + 5, 11, 4.5, 'F');
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(58, 12, 115);
-  doc.text('M', margin + 5, 11 + 1.5, { align: 'center' });
-  /* app name */
-  doc.setFontSize(12.5);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(255, 255, 255);
-  doc.text('My Money Tracker', margin + 13, 10);
-  doc.setFontSize(7.5);
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(210, 175, 255);
-  doc.text('Personal Finance Tracker', margin + 13, 16.5);
-  doc.setFontSize(7.5);
-  doc.setTextColor(200, 170, 250);
-  doc.text(`Generated: ${now}`, pageW - margin, 11, { align: 'right' });
-
-  y = 32;
-
-  /* ── Report heading ──────────────────────────────────── */
-  doc.setFontSize(15);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(42, 0, 85);
-  doc.text(reportHeading, margin, y);
-  y += 6.5;
-
-  /* ── Filter info row ──────────────────────────────────── */
-  doc.setFontSize(7.5);
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(110, 90, 140);
-  doc.text(`Account: ${accLabel}   |   Type: ${typeLabel}   |   ${selfLabel}`, margin, y);
-  y += 3.5;
-
-  doc.setDrawColor(210, 190, 240);
-  doc.setLineWidth(0.5);
-  doc.line(margin, y, margin + cW, y);
-  y += 9;
-
-  /* ═══════════════════════════════════════════════════════
-     SUMMARY BOXES  (2 rows × 3 cols)
-     ═══════════════════════════════════════════════════════ */
-  const summaryItems = [
-    { label:'Opening Balance', value:fmtAmt(d.openBal),        bg:[255,248,220], border:[200,150,0],  txt:[140,100,0]  },
-    { label:'Closing Balance', value:fmtAmt(d.closeBal),       bg:[243,229,245], border:[150,80,200], txt:[90,20,140]  },
-    { label:'Total Income',    value:fmtAmt(d.inc),            bg:[232,245,233], border:[80,170,90],  txt:[27,94,32]   },
-    { label:'Total Expense',   value:fmtAmt(d.exp),            bg:[255,235,238], border:[220,80,80],  txt:[183,28,28]  },
-    { label:'Net Balance',     value:fmtAmt(d.net),            bg:[227,242,253], border:[70,130,200], txt:[13,71,161]  },
-    { label:'Total Records',   value:String(d.txnsAll.length), bg:[237,231,246], border:[130,80,200], txt:[74,20,140]  },
+  /* ============================================================
+     MONTHS
+     ============================================================ */
+  const MONTHS_LONG = [
+    'January','February','March','April','May','June',
+    'July','August','September','October','November','December'
   ];
 
-  const boxGapX = 3.5;
-  const boxW    = (cW - boxGapX * 2) / 3;
-  const boxH    = 18;
-  const boxGapY = 3.5;
+  const MONTHS_SHORT = [
+    'Jan','Feb','Mar','Apr','May','Jun',
+    'Jul','Aug','Sep','Oct','Nov','Dec'
+  ];
 
-  [[0,1,2],[3,4,5]].forEach((row, ri) => {
-    row.forEach((idx, ci) => {
-      const item = summaryItems[idx];
-      const bx = margin + ci * (boxW + boxGapX);
-      const by = y + ri * (boxH + boxGapY);
-      doc.setFillColor(...item.bg);
-      doc.roundedRect(bx, by, boxW, boxH, 2.5, 2.5, 'F');
-      doc.setDrawColor(...item.border);
-      doc.setLineWidth(0.35);
-      doc.roundedRect(bx, by, boxW, boxH, 2.5, 2.5, 'S');
-      /* top colour strip */
-      doc.setFillColor(...item.border);
-      doc.rect(bx + 0.35, by + 0.35, boxW - 0.7, 2.2, 'F');
-      /* label */
-      doc.setFontSize(6.3);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(95, 75, 120);
-      doc.text(item.label.toUpperCase(), bx + boxW / 2, by + 7.5, { align: 'center' });
-      /* value — shrink font for long values */
-      const vLen = item.value.length;
-      const vSize = vLen > 15 ? 6.8 : vLen > 12 ? 8 : 9.5;
-      doc.setFontSize(vSize);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(...item.txt);
-      doc.text(item.value, bx + boxW / 2, by + 14, { align: 'center' });
-    });
-  });
-  y += (boxH + boxGapY) * 2 + 11;
+  /* ============================================================
+     DYNAMIC HEADING + FILENAME
+     ============================================================ */
+  const periodVal = [...document.querySelectorAll('input[name=period]')]
+    .find(r => r.checked)?.value || 'month';
 
-  /* ═══════════════════════════════════════════════════════
-     BALANCE BY ACCOUNT  (Opening | Closing side by side)
-     ═══════════════════════════════════════════════════════ */
-  const closeAccBal = {
-    union : d.openAccBal.union + d.accMap['UNION BANK'].n,
-    sbi   : d.openAccBal.sbi   + d.accMap['SBI'].n,
-    cash  : d.openAccBal.cash  + d.accMap['CASH'].n,
-  };
+  let reportHeading = 'Finance Report';
 
-  checkPage(55);
-  addSection('Balance by Account');
+  let fileName = 'MoneyTracker_Report.pdf';
 
-  const halfW = (cW - 6) / 2;
+  if(periodVal === 'month'){
 
-  ['Opening','Closing'].forEach((label, i) => {
-    const bx  = margin + i * (halfW + 6);
-    const obj = i === 0 ? d.openAccBal : closeAccBal;
-    const tot = obj.union + obj.sbi + obj.cash;
-    const hdrColor = i === 0 ? [190,130,0] : [100,20,150];
+    const mo = document.getElementById('filter-month').value;
 
-    doc.autoTable({
-      startY      : y,
-      tableWidth  : halfW,
-      margin      : { left: bx, right: pageW - bx - halfW },
-      head        : [[{
-        content : label + ' Balance',
-        colSpan : 2,
-        styles  : { halign:'center', fontStyle:'bold', fontSize:8.5,
-                    fillColor: hdrColor, textColor:[255,255,255], cellPadding:3.5 }
-      }]],
-      body : [
-        ['Union Bank', fmtAmt(obj.union)],
-        ['SBI',        fmtAmt(obj.sbi)],
-        ['Cash',       fmtAmt(obj.cash)],
-        [{content:'TOTAL', styles:{fontStyle:'bold', fillColor:[238,232,252], textColor:[50,0,100]}},
-         {content:fmtAmt(tot), styles:{fontStyle:'bold', halign:'right',
-            fillColor:[238,232,252],
-            textColor: tot>=0?[27,94,32]:[183,28,28]}}],
-      ],
-      styles      : { fontSize:8.5, cellPadding:[3,5,3,5], overflow:'linebreak', valign:'middle' },
-      columnStyles: {
-        0 : { cellWidth: halfW * 0.52 },
-        1 : { cellWidth: halfW * 0.48, halign:'right' },
-      },
-      alternateRowStyles : { fillColor:[250,246,255] },
-      didParseCell(data) {
-        if (data.section==='body' && data.column.index===1 && data.row.index < 3) {
-          const v = parseFloat(String(data.cell.raw).replace(/[^0-9.\-]/g,''));
-          data.cell.styles.textColor  = v >= 0 ? [27,94,32] : [183,28,28];
-          data.cell.styles.fontStyle  = 'bold';
-        }
-      },
-    });
-  });
-  y = doc.lastAutoTable.finalY + 11;
+    const yr = document.getElementById('filter-month-year').value;
 
-  /* ═══════════════════════════════════════════════════════
-     ACCOUNT BREAKDOWN
-     Acct(38) + Income(48) + Expense(48) + Net(48) = 182mm
-     ═══════════════════════════════════════════════════════ */
-  checkPage(42);
-  addSection('Account Breakdown  (always includes self-transfers)');
+    const mName = MONTHS_LONG[parseInt(mo)-1];
 
-  doc.autoTable({
-    startY      : y,
-    margin      : { left:margin, right:margin },
-    tableWidth  : cW,
-    head        : [['Account','Income','Expense','Net']],
-    body        : ['UNION BANK','SBI','CASH'].map(a => [
-      a==='UNION BANK' ? 'Union Bank' : a,
-      fmtAmt(d.accMap[a].i),
-      fmtAmt(d.accMap[a].e),
-      fmtAmt(d.accMap[a].n),
-    ]),
-    styles      : { fontSize:9, cellPadding:[4,5,4,5], overflow:'linebreak', valign:'middle',
-                    lineColor:[225,210,245], lineWidth:0.15 },
-    headStyles  : { fillColor:[74,20,140], textColor:[255,255,255],
-                    fontStyle:'bold', fontSize:8.5, halign:'center', cellPadding:[4,5,4,5] },
-    alternateRowStyles : { fillColor:[248,245,255] },
-    columnStyles: {
-      0 : { cellWidth:38 },
-      1 : { cellWidth:48, halign:'right' },
-      2 : { cellWidth:48, halign:'right' },
-      3 : { cellWidth:48, halign:'right' },
-    },
-    didParseCell(data) {
-      if (data.section==='body') {
-        if (data.column.index===1) { data.cell.styles.textColor=[27,94,32];  data.cell.styles.fontStyle='bold'; }
-        if (data.column.index===2) { data.cell.styles.textColor=[183,28,28]; data.cell.styles.fontStyle='bold'; }
-        if (data.column.index===3) {
-          const v = parseFloat(String(data.cell.raw).replace(/[^0-9.\-]/g,''));
-          data.cell.styles.textColor  = v>=0?[13,71,161]:[183,28,28];
-          data.cell.styles.fontStyle  = 'bold';
-        }
-      }
-    },
-  });
-  y = doc.lastAutoTable.finalY + 11;
+    reportHeading = `Monthly Report - ${mName} ${yr}`;
 
-  /* ═══════════════════════════════════════════════════════
-     NET BY CATEGORY  (zero-net rows omitted)
-     Cat(105) + Net Amount(77) = 182mm
-     ═══════════════════════════════════════════════════════ */
-  const netCatsFiltered = d.netCats.filter(([, v]) => v !== 0);
-  if (netCatsFiltered.length > 0) {
-    checkPage(38);
-    addSection('Net by Category  (Income − Expense · zero-net categories omitted)');
+    fileName = `Monthly_Report_${mName}_${yr}.pdf`;
 
-    doc.autoTable({
-      startY      : y,
-      margin      : { left:margin, right:margin },
-      tableWidth  : cW,
-      head        : [['Category','Net Amount  (Income − Expense)']],
-      body        : netCatsFiltered.map(([k,v]) => [k, fmtAmt(v)]),
-      styles      : { fontSize:9, cellPadding:[4,5,4,5], overflow:'linebreak', valign:'middle',
-                      lineColor:[200,220,245], lineWidth:0.15 },
-      headStyles  : { fillColor:[13,71,161], textColor:[255,255,255],
-                      fontStyle:'bold', fontSize:8.5, cellPadding:[4,5,4,5] },
-      alternateRowStyles : { fillColor:[240,248,255] },
-      columnStyles: {
-        0 : { cellWidth:105 },
-        1 : { cellWidth:77, halign:'right', fontStyle:'bold' },
-      },
-      didParseCell(data) {
-        if (data.section==='body' && data.column.index===1) {
-          const v = parseFloat(String(data.cell.raw).replace(/[^0-9.\-]/g,''));
-          data.cell.styles.textColor = v>=0?[27,94,32]:[183,28,28];
-        }
-      },
-    });
-    y = doc.lastAutoTable.finalY + 11;
+  }else if(periodVal === 'year'){
+
+    const yr = document.getElementById('filter-year').value;
+
+    reportHeading = `Year Report - ${yr}`;
+
+    fileName = `Year_Report_${yr}.pdf`;
+
+  }else if(periodVal === 'date'){
+
+    const dv = document.getElementById('filter-date').value;
+
+    if(dv){
+
+      const [yr,mo,dy] = dv.split('-');
+
+      const sh = MONTHS_SHORT[parseInt(mo)-1];
+
+      reportHeading = `Daily Report - ${dy}-${sh}-${yr}`;
+
+      fileName = `Daily_Report_${dy}${sh}${yr}.pdf`;
+    }
+
+  }else if(periodVal === 'range'){
+
+    const fv = document.getElementById('filter-from').value;
+
+    const tv = document.getElementById('filter-to').value;
+
+    if(fv && tv){
+
+      const [fy,fm,fd] = fv.split('-');
+
+      const [ty,tm,td] = tv.split('-');
+
+      const fSh = MONTHS_SHORT[parseInt(fm)-1];
+
+      const tSh = MONTHS_SHORT[parseInt(tm)-1];
+
+      reportHeading =
+        `Custom Report - ${fd}-${fSh}-${fy} to ${td}-${tSh}-${ty}`;
+
+      fileName =
+        `Custom_Report_${fd}${fSh}${fy}_to_${td}${tSh}${ty}.pdf`;
+    }
   }
 
-  /* ═══════════════════════════════════════════════════════
+  /* ============================================================
+     PAGE HEADER
+     ============================================================ */
+  doc.setFillColor(58,12,115);
+
+  doc.rect(0,0,pageW,22,'F');
+
+  doc.setFontSize(14);
+
+  doc.setFont('helvetica','bold');
+
+  doc.setTextColor(255,255,255);
+
+  doc.text('My Money Tracker', margin, 11);
+
+  doc.setFontSize(8);
+
+  doc.setTextColor(220,200,255);
+
+  doc.text(reportHeading, margin, 17);
+
+  y = 30;
+
+  /* ============================================================
+     SUMMARY
+     ============================================================ */
+  doc.setFontSize(11);
+
+  doc.setTextColor(40,40,40);
+
+  doc.text(`Opening Balance : ${fmtAmt(d.openBal)}`, margin, y);
+
+  y += 7;
+
+  doc.text(`Closing Balance : ${fmtAmt(d.closeBal)}`, margin, y);
+
+  y += 7;
+
+  doc.text(`Total Income : ${fmtAmt(d.inc)}`, margin, y);
+
+  y += 7;
+
+  doc.text(`Total Expense : ${fmtAmt(d.exp)}`, margin, y);
+
+  y += 7;
+
+  doc.text(`Net Balance : ${fmtAmt(d.net)}`, margin, y);
+
+  y += 12;
+
+  /* ============================================================
+     ACCOUNT BREAKDOWN
+     ============================================================ */
+  doc.setFontSize(12);
+
+  doc.setFont('helvetica','bold');
+
+  doc.text('Account Breakdown', margin, y);
+
+  y += 5;
+
+  doc.autoTable({
+
+    startY:y,
+
+    margin:{left:margin,right:margin},
+
+    head:[['Account','Income','Expense','Net']],
+
+    body:['UNION BANK','SBI','CASH'].map(a => [
+
+      a,
+
+      fmtAmt(d.accMap[a]?.i || 0),
+
+      fmtAmt(d.accMap[a]?.e || 0),
+
+      fmtAmt(d.accMap[a]?.n || 0)
+
+    ]),
+
+    styles:{
+      fontSize:9,
+      overflow:'linebreak',
+      cellPadding:3
+    },
+
+    headStyles:{
+      fillColor:[74,20,140]
+    }
+  });
+
+  y = doc.lastAutoTable.finalY + 10;
+
+  /* ============================================================
+     NET BY CATEGORY ONLY
+     ============================================================ */
+
+  // ✅ FIXED ZERO FILTER
+  const netCatsFiltered =
+    (d.netCats || []).filter(([,v]) => Number(v) !== 0);
+
+  if(netCatsFiltered.length){
+
+    doc.setFontSize(12);
+
+    doc.setFont('helvetica','bold');
+
+    doc.text('Net By Category', margin, y);
+
+    y += 5;
+
+    doc.autoTable({
+
+      startY:y,
+
+      margin:{left:margin,right:margin},
+
+      head:[['Category','Net Amount']],
+
+      body:netCatsFiltered.map(([k,v]) => [
+
+        k,
+
+        fmtAmt(v)
+
+      ]),
+
+      styles:{
+        fontSize:9,
+        overflow:'linebreak',
+        cellPadding:3
+      },
+
+      headStyles:{
+        fillColor:[13,71,161]
+      }
+    });
+
+    y = doc.lastAutoTable.finalY + 10;
+  }
+
+  /* ============================================================
      ALL TRANSACTIONS
-     Date(22)+Desc(58)+Tag(22)+Acct(21)+Cat(21)+Type(15)+Amt(23) = 182mm
-     ═══════════════════════════════════════════════════════ */
-  checkPage(30);
-  addSection(`All Transactions  (${d.txnsAll.length} records · self-transfers shown)`);
+     ============================================================ */
+  doc.setFontSize(12);
+
+  doc.setFont('helvetica','bold');
+
+  doc.text(
+    `All Transactions (${d.txnsAll.length})`,
+    margin,
+    y
+  );
+
+  y += 5;
 
   const txnRows = [...d.txnsAll].reverse().map(t => [
-    t.date,
-    t.description,
-    t.selfTransfer === 1 ? 'Self\nTransfer' : '',
-    t.account === 'UNION BANK' ? 'Union\nBank' : t.account,
-    t.category || '—',
-    t.type,
-    (t.type==='Income'?'+':'-') + fmtAmt(t.amount),
+
+    t.date || '',
+
+    t.description || '',
+
+    // ✅ FIXED SELF TRANSFER FIELD
+    (t.selfTransfer === 1 ||
+     t.selfTransferInd === 1)
+      ? 'Self Transfer'
+      : '',
+
+    t.account || '',
+
+    t.category || '',
+
+    t.type || '',
+
+    (t.type === 'Income' ? '+' : '-') +
+      fmtAmt(t.amount || 0)
   ]);
 
   doc.autoTable({
-    startY      : y,
-    margin      : { left:margin, right:margin },
-    tableWidth  : cW,
-    head        : [['Date','Description','Tag','Account','Category','Type','Amount']],
-    body        : txnRows,
-    styles      : { fontSize:7.5, cellPadding:[3,3,3,3],
-                    overflow:'linebreak', valign:'middle',
-                    lineColor:[228,218,245], lineWidth:0.12 },
-    headStyles  : { fillColor:[74,20,140], textColor:[255,255,255],
-                    fontStyle:'bold', fontSize:7.5, halign:'center', cellPadding:[4,3,4,3] },
-    alternateRowStyles : { fillColor:[251,249,255] },
-    columnStyles: {
-      0 : { cellWidth:22, halign:'center', fontSize:7   },
-      1 : { cellWidth:58, fontSize:7.5                  },
-      2 : { cellWidth:22, halign:'center', fontSize:6.5, fontStyle:'bold' },
-      3 : { cellWidth:21, halign:'center', fontSize:7   },
-      4 : { cellWidth:21, halign:'center', fontSize:7   },
-      5 : { cellWidth:15, halign:'center', fontSize:7,  fontStyle:'bold' },
-      6 : { cellWidth:23, halign:'right',  fontSize:7.5, fontStyle:'bold' },
+
+    startY:y,
+
+    margin:{left:margin,right:margin},
+
+    tableWidth:cW,
+
+    head:[[
+      'Date',
+      'Description',
+      'Tag',
+      'Account',
+      'Category',
+      'Type',
+      'Amount'
+    ]],
+
+    body:txnRows,
+
+    styles:{
+      fontSize:7.5,
+      overflow:'linebreak',
+      cellPadding:2.5
     },
-    didParseCell(data) {
-      if (data.section==='body') {
-        /* Self Transfer tag cell */
-        if (data.column.index===2 && String(data.cell.raw).includes('Transfer')) {
-          data.cell.styles.textColor  = [100,20,150];
-          data.cell.styles.fillColor  = [243,229,245];
+
+    headStyles:{
+      fillColor:[74,20,140],
+      textColor:[255,255,255]
+    },
+
+    alternateRowStyles:{
+      fillColor:[248,245,255]
+    },
+
+    didParseCell(data){
+
+      if(data.section === 'body'){
+
+        // SELF TRANSFER ROW
+        if(String(data.row.raw[2]).includes('Transfer')){
+
+          data.cell.styles.fillColor = [245,235,255];
         }
-        /* Type colouring */
-        if (data.column.index===5) {
-          data.cell.styles.textColor = data.cell.raw==='Income'?[27,94,32]:[183,28,28];
+
+        // TYPE COLOR
+        if(data.column.index === 5){
+
+          data.cell.styles.textColor =
+            data.cell.raw === 'Income'
+              ? [27,94,32]
+              : [183,28,28];
         }
-        /* Amount colouring */
-        if (data.column.index===6) {
-          data.cell.styles.textColor = String(data.cell.raw||'').startsWith('+')?[27,94,32]:[183,28,28];
-        }
-        /* Tint entire self-transfer row */
-        if (String(data.row.raw[2]||'').includes('Transfer') && data.column.index!==2) {
-          data.cell.styles.fillColor = [250,244,255];
+
+        // AMOUNT COLOR
+        if(data.column.index === 6){
+
+          data.cell.styles.textColor =
+            String(data.cell.raw).startsWith('+')
+              ? [27,94,32]
+              : [183,28,28];
         }
       }
-    },
+    }
   });
 
-  /* ═══════════════════════════════════════════════════════
-     FOOTER — stamped on every page
-     ═══════════════════════════════════════════════════════ */
+  /* ============================================================
+     FOOTER
+     ============================================================ */
   const totalPages = doc.internal.getNumberOfPages();
-  for (let p = 1; p <= totalPages; p++) {
+
+  for(let p=1; p<=totalPages; p++){
+
     doc.setPage(p);
-    doc.setDrawColor(187, 134, 252);
-    doc.setLineWidth(0.3);
-    doc.line(margin, pageH - 12, margin + cW, pageH - 12);
-    doc.setFontSize(6.8);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(140, 100, 180);
+
+    doc.setFontSize(7);
+
+    doc.setTextColor(120,120,120);
+
     doc.text(
-      `My Money Tracker  ·  ${reportHeading}  ·  Page ${p} of ${totalPages}`,
-      pageW / 2, pageH - 7, { align: 'center' }
+      `${reportHeading} - Page ${p} of ${totalPages}`,
+      pageW/2,
+      pageH-8,
+      {align:'center'}
     );
   }
 
+  /* ============================================================
+     SAVE
+     ============================================================ */
   doc.save(fileName);
-  showToast('PDF downloaded! ✓', 'success');
-}
 
+  showToast('PDF downloaded! ✓','success');
+}
 /* ============================================================
    INIT
    ============================================================ */
