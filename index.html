@@ -904,13 +904,19 @@ function fmtDisplayDate(ddmmyyyy){
   return `${parseInt(d)} ${months[parseInt(m)-1]} ${y}`;
 }
 
-/* ✅ NEW: Sort array of transaction objects by date descending (newest first) */
+/* ✅ Sort array of transaction objects by date descending (newest first),
+   with createdAt timestamp as tiebreaker for same-day transactions
+   (newest createdAt first) so manual entry order doesn't leak through. */
 function sortByDateDesc(arr){
   return [...arr].sort((a,b)=>{
     const ia = ddmmyyyyToISO(a.date) || '';
     const ib = ddmmyyyyToISO(b.date) || '';
     if(ib > ia) return 1;
     if(ib < ia) return -1;
+    const ca = a.createdAt || '';
+    const cb = b.createdAt || '';
+    if(cb > ca) return 1;
+    if(cb < ca) return -1;
     return 0;
   });
 }
@@ -1450,7 +1456,7 @@ function renderDashboard(){
   const openBal=calcOpeningBalance();
   const curBal=calcCurrentBalance();
 
-  /* ✅ Sort by date desc, then take top 5 */
+  /* ✅ Sort by date desc (with createdAt tiebreaker), then take top 5 */
   const recent=sortByDateDesc(state.transactions).slice(0,5);
 
   document.getElementById('account-cards').innerHTML=`
@@ -1525,7 +1531,7 @@ function renderHistory(query=''){
   const container=document.getElementById('history-list');
   const q=query.trim().toLowerCase();
 
-  /* ✅ Sort by date desc first, then apply search filter */
+  /* ✅ Sort by date desc (with createdAt tiebreaker) first, then apply search filter */
   let txns=sortByDateDesc(state.transactions);
   if(q) txns=txns.filter(t=>t.description.toLowerCase().includes(q)||t.category.toLowerCase().includes(q));
 
@@ -2097,7 +2103,7 @@ function renderReport(txns, txnsBalance, txnsAll, inclSelf){
   const maxExp=expCats[0]?expCats[0][1]:1;
   const maxNet=Math.max(...Object.values(netCatMap).map(Math.abs),1);
 
-  /* ✅ Sort transaction list by date desc (newest first) */
+  /* ✅ Sort transaction list by date desc (with createdAt tiebreaker, newest first) */
   const txnList=sortByDateDesc(txnsAll);
 
   lastReportData={txns,txnsBalance,txnsAll,inc,exp,net,openBal,closeBal,openAccBal,accMap,incCats,expCats,netCats,inclSelf};
@@ -2480,11 +2486,10 @@ function downloadReportPDF(){
     y = doc.lastAutoTable.finalY + 8;
   }
 
-  /* ✅ ALL TRANSACTIONS — sorted by date desc (newest first) */
+  /* ✅ ALL TRANSACTIONS — sorted by date desc, with createdAt tiebreaker (newest first) */
   checkPage(28);
   addSection(`All Transactions (${d.txnsAll.length})`);
 
-  /* sortByDateDesc applied here for PDF table */
   const txnRows = sortByDateDesc(d.txnsAll).map(t => [
     t.date,
     t.description + (t.selfTransfer === 1 ? ' [Self Transfer]' : ''),
