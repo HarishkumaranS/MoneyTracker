@@ -687,10 +687,10 @@ select.form-input option{background:var(--card);color:var(--text);}
         <label class="form-label">Category</label>
         <select class="form-input" id="txn-category">
           <option value="">Select category...</option>
-          <option>Food</option><option>Transport</option><option>Savings</option>
+          <option>Food</option><option>Groceries</option><option>Transport</option><option>Savings</option>
           <option>Bills</option><option>Education</option><option>Healthcare</option>
-          <option>Entertainment</option><option>Shopping</option><option>Investment</option>
-          <option>Salary</option><option>Chit</option><option>Transfer</option><option>Others</option>
+          <option>Entertainment</option><option>Shopping</option><option>Accessories</option><option>Personal Care</option><option>Investment</option>
+          <option>Interest</option><option>Salary</option><option>Chit</option><option>Transfer</option><option>Others</option>
         </select>
       </div>
       <div class="form-group">
@@ -779,11 +779,11 @@ select.form-input option{background:var(--card);color:var(--text);}
             <button class="filter-seg-btn" data-type="Income" onclick="toggleTypeFilter(this)">INCOME</button>
             <button class="filter-seg-btn" data-type="Expense" onclick="toggleTypeFilter(this)">EXPENSE</button>
           </div>
-          <!-- ✅ NEW: Category Filter -->
+          <!-- ✅ Category Filter — Dropdown -->
           <div class="filter-section-label">Category</div>
-          <div class="filter-seg" id="cat-filter-seg">
-            <button class="filter-seg-btn active" data-cat="ALL" onclick="toggleCatFilter(this)">ALL</button>
-          </div>
+          <select class="form-input" id="cat-filter-select" onchange="onCatFilterChange()">
+            <option value="ALL">ALL Categories</option>
+          </select>
           <!-- Self Transfer Filter — controls calculations & summaries; transaction LIST always shows all -->
           <div class="check-row" style="margin-top:14px;">
             <input type="checkbox" id="report-self-transfer">
@@ -1915,7 +1915,7 @@ function initReportFilters(){
     selY.innerHTML+=`<option ${y===now.getFullYear()?'selected':''}>${y}</option>`;
   }
   updatePeriodUI();
-  /* ✅ Populate category filter buttons from actual transaction data */
+  /* ✅ Populate category filter dropdown from actual transaction data */
   populateCatFilter();
 }
 function updatePeriodUI(){
@@ -1936,21 +1936,28 @@ function toggleTypeFilter(btn){
   state.filterType=btn.dataset.type;
 }
 
-/* ✅ NEW: Category filter toggle */
-function toggleCatFilter(btn){
-  document.querySelectorAll('[data-cat]').forEach(b=>b.classList.remove('active'));
-  btn.classList.add('active');
-  state.filterCat=btn.dataset.cat;
+/* ✅ NEW: Category filter change (dropdown) */
+function onCatFilterChange(){
+  const sel=document.getElementById('cat-filter-select');
+  state.filterCat=sel.value;
 }
 
-/* ✅ NEW: Populate category filter buttons dynamically from transaction data */
+/* ✅ NEW: Populate category filter dropdown dynamically from transaction data,
+   plus the fixed master list of categories offered in Add/Edit form,
+   so filtering works even for categories with no transactions yet. */
 function populateCatFilter(){
-  const cats=[...new Set(state.transactions.map(t=>t.category).filter(Boolean))].sort();
-  const seg=document.getElementById('cat-filter-seg');
-  if(!seg) return;
-  seg.innerHTML=`<button class="filter-seg-btn active" data-cat="ALL" onclick="toggleCatFilter(this)">ALL</button>`
-    + cats.map(c=>`<button class="filter-seg-btn" data-cat="${escHtml(c)}" onclick="toggleCatFilter(this)">${escHtml(c)}</button>`).join('');
-  state.filterCat='ALL';
+  const masterCats=['Food','Groceries','Transport','Savings','Bills','Education','Healthcare',
+    'Entertainment','Shopping','Accessories','Personal Care','Investment','Interest','Salary',
+    'Chit','Transfer','Others'];
+  const txnCats=[...new Set(state.transactions.map(t=>t.category).filter(Boolean))];
+  const cats=[...new Set([...masterCats,...txnCats])].sort();
+  const sel=document.getElementById('cat-filter-select');
+  if(!sel) return;
+  const prevVal=state.filterCat||'ALL';
+  sel.innerHTML=`<option value="ALL">ALL Categories</option>`
+    + cats.map(c=>`<option value="${escHtml(c)}">${escHtml(c)}</option>`).join('');
+  sel.value=cats.includes(prevVal)?prevVal:'ALL';
+  state.filterCat=sel.value;
 }
 
 function toggleFilterPanel(){
@@ -2010,7 +2017,7 @@ function applyReportFilter(){
     txns=txns.filter(t=>t.type===state.filterType);
     txnsAll=txnsAll.filter(t=>t.type===state.filterType);
   }
-  /* ✅ NEW: Apply category filter to txns (summaries) and txnsAll (display) */
+  /* ✅ Apply category filter (from dropdown) to txns (summaries) and txnsAll (display) */
   if(state.filterCat&&state.filterCat!=='ALL'){
     txns=txns.filter(t=>t.category===state.filterCat);
     txnsAll=txnsAll.filter(t=>t.category===state.filterCat);
